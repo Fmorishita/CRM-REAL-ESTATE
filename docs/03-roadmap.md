@@ -11,7 +11,7 @@
 | **F2** | Database core: Prisma + Supabase, migraciones, RLS, seeds demo "Morishita Realty Group", Zod schemas | ✅ |
 | **F3** | Dashboard inteligente: Today Command Center, Hot Leads, Pipeline Overview, Conversations, Upcoming Visits, AI Insights | ✅ |
 | **F4** | CRM contactos: tabla/kanban/perfil, búsqueda, filtros, tags, notas, timeline, score | ✅ |
-| **F5** | Pipeline: kanban drag & drop, forecast, comisiones, probabilidad | Pendiente |
+| **F5** | Pipeline: kanban drag & drop, forecast, comisiones, probabilidad | ✅ |
 | **F6** | Propiedades: CRUD, galería, grid/tabla/detalle, demo (Ensenada, CDMX, Valle de Guadalupe, Tijuana, Monterrey) | Pendiente |
 | **F7** | Landing Page Engine: `/p/[slug]`, `/company/[slug]`, SEO/OG, form → contacto + oportunidad + UTM | Pendiente |
 | **F8** | Inbox MVP: conversaciones demo, chat, filtros, asignación, adapters mock (WhatsApp/Email/IG/FB/WebChat) | Pendiente |
