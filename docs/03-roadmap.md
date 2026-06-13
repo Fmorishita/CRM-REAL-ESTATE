@@ -8,7 +8,7 @@
 |------|-----------|--------|
 | **F0** | Blueprint + proyecto base Next.js + decisiones técnicas | ✅ |
 | **F1** | Foundation SaaS: AppShell, sidebar/bottom-nav/topbar, theme claro/oscuro, shadcn/ui, páginas shell de los 10 módulos, tenant context + auth preparada | ✅ |
-| **F2** | Database core: Prisma + Supabase, migraciones, RLS, seeds demo "Morishita Realty Group", Zod schemas | Pendiente |
+| **F2** | Database core: Prisma + Supabase, migraciones, RLS, seeds demo "Morishita Realty Group", Zod schemas | ✅ |
 | **F3** | Dashboard inteligente: Today Command Center, Hot Leads, Pipeline Overview, Conversations, Upcoming Visits, AI Insights | Pendiente |
 | **F4** | CRM contactos: tabla/kanban/perfil, búsqueda, filtros, tags, notas, timeline, score | Pendiente |
 | **F5** | Pipeline: kanban drag & drop, forecast, comisiones, probabilidad | Pendiente |

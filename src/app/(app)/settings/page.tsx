@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { MODULES } from "@/config/modules";
 import { ROLE_LABELS } from "@/config/permissions";
 import { getTenantContext } from "@/lib/auth/session";
-import { DEMO_TEAM, type DemoTeamMember } from "@/lib/demo/session";
+import type { DemoTeamMember } from "@/lib/demo/session";
+import { listTeam } from "@/modules/organizations/server/team";
 
 export const metadata: Metadata = { title: MODULES.settings.label };
 
@@ -71,6 +72,7 @@ const upcomingSections = [
 export default async function SettingsPage() {
   const ctx = await getTenantContext();
   const org = ctx.organization;
+  const team = await listTeam(org.id);
 
   const orgFacts = [
     { label: "Nombre", value: org.name },
@@ -108,9 +110,9 @@ export default async function SettingsPage() {
         <div className="flex items-center gap-2">
           <Users className="size-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold text-foreground">Equipo</h2>
-          <Badge variant="secondary">{DEMO_TEAM.length} miembros</Badge>
+          <Badge variant="secondary">{team.length} miembros</Badge>
         </div>
-        <DataTable columns={teamColumns} data={DEMO_TEAM} getRowId={(member) => member.id} />
+        <DataTable columns={teamColumns} data={team} getRowId={(member) => member.id} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
