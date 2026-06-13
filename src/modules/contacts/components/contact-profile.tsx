@@ -12,6 +12,8 @@ import { ContactFormDialog } from "@/modules/contacts/components/contact-form-di
 import { ContactNotes } from "@/modules/contacts/components/contact-notes";
 import { ContactTimeline } from "@/modules/contacts/components/contact-timeline";
 import type { ContactDetail, ContactFormOptions } from "@/modules/contacts/types";
+import { PropertyMatchList } from "@/modules/matching/components/property-match-list";
+import type { PropertyMatch } from "@/modules/matching/types";
 
 function waLink(value: string | null): string | null {
   if (!value) return null;
@@ -25,10 +27,12 @@ export function ContactProfile({
   contact,
   options,
   canEdit,
+  matches = [],
 }: {
   contact: ContactDetail;
   options: ContactFormOptions;
   canEdit: boolean;
+  matches?: PropertyMatch[];
 }) {
   const wa = waLink(contact.whatsapp ?? contact.phone);
 
@@ -170,12 +174,16 @@ export function ContactProfile({
         <div className="lg:col-span-2">
           <Card>
             <CardContent className="pt-5">
-              <Tabs defaultValue="timeline">
+              <Tabs defaultValue="recommended">
                 <TabsList>
+                  <TabsTrigger value="recommended">Recomendadas ({matches.length})</TabsTrigger>
                   <TabsTrigger value="timeline">Actividad</TabsTrigger>
                   <TabsTrigger value="notes">Notas ({contact.notes.length})</TabsTrigger>
                   <TabsTrigger value="properties">Propiedades ({contact.properties.length})</TabsTrigger>
                 </TabsList>
+                <TabsContent value="recommended" className="pt-4">
+                  <PropertyMatchList matches={matches} />
+                </TabsContent>
                 <TabsContent value="timeline" className="pt-4">
                   <ContactTimeline entries={contact.timeline} />
                 </TabsContent>

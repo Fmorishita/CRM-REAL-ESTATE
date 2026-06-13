@@ -10,6 +10,7 @@ import {
   MapPin,
   Pencil,
   Ruler,
+  Sparkles,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -20,6 +21,8 @@ import { getInitials } from "@/lib/format";
 import { StatusBadge } from "@/modules/properties/components/property-badges";
 import { PropertyFormDialog } from "@/modules/properties/components/property-form-dialog";
 import type { PropertyDetail, PropertyFormOptions } from "@/modules/properties/types";
+import { ClientMatchList } from "@/modules/matching/components/client-match-list";
+import type { ClientMatch } from "@/modules/matching/types";
 
 export function PropertyDetailView({
   property,
@@ -27,12 +30,14 @@ export function PropertyDetailView({
   defaultCurrency,
   canManage,
   canPublish,
+  clientMatches = [],
 }: {
   property: PropertyDetail;
   options: PropertyFormOptions;
   defaultCurrency: string;
   canManage: boolean;
   canPublish: boolean;
+  clientMatches?: ClientMatch[];
 }) {
   const location = [property.zone, property.city, property.state].filter(Boolean).join(", ");
   const cover = property.media[0];
@@ -216,6 +221,18 @@ export function PropertyDetailView({
                   ))}
                 </ul>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Sparkles className="size-4 text-violet-500" />
+                Clientes compatibles
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ClientMatchList matches={clientMatches} />
             </CardContent>
           </Card>
         </div>

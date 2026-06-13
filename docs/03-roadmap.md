@@ -16,7 +16,7 @@
 | **F7** | Landing Page Engine: `/p/[slug]`, `/company/[slug]`, SEO/OG, form → contacto + oportunidad + UTM | ✅ |
 | **F8** | Inbox MVP: conversaciones demo, chat, filtros, asignación, adapters mock (WhatsApp/Email/IG/FB/WebChat) | ✅ |
 | **F9** | AI Orchestrator MVP: providers/router/prompts/logs, MockProvider, UI de configuración en settings | ✅ |
-| **F10** | Smart Matching MVP: score + razones + mensaje sugerido; en perfil de contacto y en propiedad | Pendiente |
+| **F10** | Smart Matching MVP: score + razones + mensaje sugerido; en perfil de contacto y en propiedad | ✅ |
 | **F11** | Visit Planner MVP: agenda, estados, notas post-visita, ruta mock | Pendiente |
 | **F12** | Automation Builder MVP: trigger/conditions/actions, plantillas, logs | Pendiente |
 | **F13** | Customer Portal MVP: `/portal`, comprador y vendedor, mobile-first | Pendiente |
