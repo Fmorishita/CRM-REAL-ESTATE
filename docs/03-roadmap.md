@@ -21,8 +21,8 @@
 | **F12** | Automation Builder MVP: trigger/conditions/actions, plantillas, logs | ✅ |
 | **F13** | Customer Portal MVP: `/portal`, comprador y vendedor, mobile-first | ✅ |
 | **F14** | Deal Intelligence MVP: lead/deal score, riesgo, next best action en perfil/pipeline/dashboard | ✅ |
-| **F15** | AI Copilot MVP: chat, tool-calling interno, confirmación de acciones sensibles | Pendiente |
-| **F16** | Analytics MVP: overview, sales, agents, properties, sources, automations | Pendiente |
+| **F15** | AI Copilot MVP: chat, tool-calling interno, confirmación de acciones sensibles | ✅ |
+| **F16** | Analytics MVP: overview, sales, agents, properties, sources, automations | ✅ |
 
 ## Hardening del MVP (Fases 17–20)
 
