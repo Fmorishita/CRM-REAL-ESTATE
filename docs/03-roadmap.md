@@ -10,7 +10,7 @@
 | **F1** | Foundation SaaS: AppShell, sidebar/bottom-nav/topbar, theme claro/oscuro, shadcn/ui, páginas shell de los 10 módulos, tenant context + auth preparada | ✅ |
 | **F2** | Database core: Prisma + Supabase, migraciones, RLS, seeds demo "Morishita Realty Group", Zod schemas | ✅ |
 | **F3** | Dashboard inteligente: Today Command Center, Hot Leads, Pipeline Overview, Conversations, Upcoming Visits, AI Insights | ✅ |
-| **F4** | CRM contactos: tabla/kanban/perfil, búsqueda, filtros, tags, notas, timeline, score | Pendiente |
+| **F4** | CRM contactos: tabla/kanban/perfil, búsqueda, filtros, tags, notas, timeline, score | ✅ |
 | **F5** | Pipeline: kanban drag & drop, forecast, comisiones, probabilidad | Pendiente |
 | **F6** | Propiedades: CRUD, galería, grid/tabla/detalle, demo (Ensenada, CDMX, Valle de Guadalupe, Tijuana, Monterrey) | Pendiente |
 | **F7** | Landing Page Engine: `/p/[slug]`, `/company/[slug]`, SEO/OG, form → contacto + oportunidad + UTM | Pendiente |
