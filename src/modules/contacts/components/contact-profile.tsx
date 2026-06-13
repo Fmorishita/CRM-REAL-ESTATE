@@ -14,6 +14,8 @@ import { ContactTimeline } from "@/modules/contacts/components/contact-timeline"
 import type { ContactDetail, ContactFormOptions } from "@/modules/contacts/types";
 import { PropertyMatchList } from "@/modules/matching/components/property-match-list";
 import type { PropertyMatch } from "@/modules/matching/types";
+import { DealIntelligenceCard } from "@/modules/intelligence/components/deal-intelligence-card";
+import type { Intelligence } from "@/lib/intelligence/engine";
 
 function waLink(value: string | null): string | null {
   if (!value) return null;
@@ -28,11 +30,13 @@ export function ContactProfile({
   options,
   canEdit,
   matches = [],
+  intelligence,
 }: {
   contact: ContactDetail;
   options: ContactFormOptions;
   canEdit: boolean;
   matches?: PropertyMatch[];
+  intelligence?: Intelligence | null;
 }) {
   const wa = waLink(contact.whatsapp ?? contact.phone);
 
@@ -140,6 +144,8 @@ export function ContactProfile({
               <Row label="Creado">{contact.createdAtLabel}</Row>
             </CardContent>
           </Card>
+
+          {intelligence ? <DealIntelligenceCard intelligence={intelligence} /> : null}
 
           {contact.preference ? (
             <Card>
