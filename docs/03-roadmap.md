@@ -19,7 +19,7 @@
 | **F10** | Smart Matching MVP: score + razones + mensaje sugerido; en perfil de contacto y en propiedad | ✅ |
 | **F11** | Visit Planner MVP: agenda, estados, notas post-visita, ruta mock | ✅ |
 | **F12** | Automation Builder MVP: trigger/conditions/actions, plantillas, logs | ✅ |
-| **F13** | Customer Portal MVP: `/portal`, comprador y vendedor, mobile-first | Pendiente |
+| **F13** | Customer Portal MVP: `/portal`, comprador y vendedor, mobile-first | ✅ |
 | **F14** | Deal Intelligence MVP: lead/deal score, riesgo, next best action en perfil/pipeline/dashboard | Pendiente |
 | **F15** | AI Copilot MVP: chat, tool-calling interno, confirmación de acciones sensibles | Pendiente |
 | **F16** | Analytics MVP: overview, sales, agents, properties, sources, automations | Pendiente |

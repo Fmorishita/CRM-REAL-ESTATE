@@ -193,3 +193,9 @@ INSERT INTO ai_task_configs (id, organization_id, task_key, provider, model, tem
 -- ── Landing page (Ensenada house) ────────────────────────────────────────────
 INSERT INTO landing_pages (id, organization_id, kind, property_id, slug, template, is_active, hide_price, show_exact_location, seo) VALUES
 ('de000000-0000-4000-8000-000000000001','14ffd897-81d1-409e-9f50-c96a416e0d26','property','b2000000-0000-4000-8000-000000000001','casa-frente-al-mar-ensenada','default',true,false,false,'{"title":"Casa frente al mar en Ensenada","description":"Residencia de lujo con vista al Pacífico y acceso a playa privada."}');
+
+-- ── Client portal accounts ────────────────────────────────────────────────────
+INSERT INTO client_portal_accounts (id, organization_id, contact_id, email, portal_type, status) VALUES
+('e0000000-0000-4000-8000-000000000001','14ffd897-81d1-409e-9f50-c96a416e0d26','d4000000-0000-4000-8000-000000000001','roberto.gomez@gmail.com','buyer','active'),
+('e0000000-0000-4000-8000-000000000002','14ffd897-81d1-409e-9f50-c96a416e0d26','d4000000-0000-4000-8000-000000000008','carmen.ruiz@gmail.com','seller','active'),
+('e0000000-0000-4000-8000-000000000003','14ffd897-81d1-409e-9f50-c96a416e0d26','d4000000-0000-4000-8000-000000000005','eduardo.v@empresa.mx','investor','active');
