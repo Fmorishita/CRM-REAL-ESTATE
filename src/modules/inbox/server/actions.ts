@@ -8,7 +8,9 @@ import { auditLog } from "@/lib/audit";
 import { isDemoMode } from "@/lib/db";
 import { prisma } from "@/lib/db/prisma";
 import { getChannelAdapter } from "@/lib/integrations/channels";
+import { suggestReply } from "@/lib/ai/runners";
 import { fail, ok, type ActionResult } from "@/lib/result";
+import { demoConversationDetail } from "@/modules/inbox/demo";
 
 const DEMO_ERROR = "Acción no disponible en modo demo. Configura la base de datos para guardar cambios.";
 
@@ -210,6 +212,59 @@ export async function createTaskFromConversation(input: unknown): Promise<Action
   } catch (error) {
     console.error("createTaskFromConversation failed:", error);
     return fail("No se pudo crear la tarea.");
+  }
+}
+
+const suggestSchema = z.object({ conversationId: z.string().uuid() });
+
+export async function suggestReplyWithAi(input: unknown): Promise<ActionResult<{ text: string; mocked: boolean }>> {
+  const ctx = await getTenantContext();
+  try {
+    requirePermission(ctx, "conversations.reply");
+  } catch {
+    return fail("No tienes permiso.");
+  }
+  const parsed = suggestSchema.safeParse(input);
+  if (!parsed.success) return fail("Datos inválidos.");
+
+  try {
+    let contactName = "el cliente";
+    let channel = "whatsapp";
+    let turns: { direction: "inbound" | "outbound"; body: string }[] = [];
+
+    if (isDemoMode()) {
+      const demo = demoConversationDetail(parsed.data.conversationId);
+      if (!demo) return fail("Conversación no encontrada.");
+      contactName = demo.contactName;
+      channel = demo.channel;
+      turns = demo.messages.map((m) => ({ direction: m.direction, body: m.body }));
+    } else {
+      const conversation = await prisma.conversation.findFirst({
+        where: { id: parsed.data.conversationId, organizationId: ctx.organization.id },
+        include: {
+          contact: true,
+          channelAccount: true,
+          messages: { orderBy: { sentAt: "asc" }, take: 50 },
+        },
+      });
+      if (!conversation) return fail("Conversación no encontrada.");
+      contactName = conversation.contact
+        ? `${conversation.contact.firstName} ${conversation.contact.lastName}`
+        : "el cliente";
+      channel = conversation.channelAccount.channel;
+      turns = conversation.messages.map((m) => ({ direction: m.direction, body: m.body }));
+    }
+
+    const result = await suggestReply(ctx, {
+      contactName,
+      channel,
+      turns,
+      conversationId: parsed.data.conversationId,
+    });
+    return ok({ text: result.text, mocked: result.mocked });
+  } catch (error) {
+    console.error("suggestReplyWithAi failed:", error);
+    return fail("No se pudo generar la sugerencia.");
   }
 }
 

@@ -11,6 +11,7 @@ import {
   Sparkles,
   StickyNote,
   User,
+  Wand2,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -46,6 +47,7 @@ import {
   recommendProperty,
   sendMessage,
   setConversationStatus,
+  suggestReplyWithAi,
 } from "@/modules/inbox/server/actions";
 import type { ChatMessage, ConversationDetail, InboxOptions } from "@/modules/inbox/types";
 
@@ -68,6 +70,19 @@ export function ConversationView({
   const [note, setNote] = React.useState("");
   const [taskOpen, setTaskOpen] = React.useState(false);
   const [taskTitle, setTaskTitle] = React.useState("");
+  const [suggesting, setSuggesting] = React.useState(false);
+
+  async function onSuggest() {
+    setSuggesting(true);
+    const result = await suggestReplyWithAi({ conversationId: conversation.id });
+    setSuggesting(false);
+    if (result.ok) {
+      setBody(result.data.text);
+      toast.success(result.data.mocked ? "Sugerencia generada (mock)." : "Sugerencia generada con IA.");
+    } else {
+      toast.error(result.error);
+    }
+  }
 
   const currentKey = conversation.id + conversation.messages.length;
   if (syncKey !== currentKey) {
@@ -286,7 +301,11 @@ export function ConversationView({
       {/* Composer */}
       {canReply ? (
         <div className="border-t border-border p-3">
-          <div className="mb-2 flex flex-wrap gap-1">
+          <div className="mb-2 flex flex-wrap items-center gap-1">
+            <Button variant="outline" size="xs" onClick={onSuggest} disabled={suggesting}>
+              {suggesting ? <Loader2 className="animate-spin" /> : <Wand2 />}
+              Sugerir con IA
+            </Button>
             {options.quickReplies.map((qr) => (
               <button
                 key={qr.id}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Bot, Palette, Plug, Users } from "lucide-react";
 
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
@@ -46,13 +47,6 @@ const teamColumns: DataTableColumn<DemoTeamMember>[] = [
 ];
 
 const upcomingSections = [
-  {
-    key: "ai",
-    icon: Bot,
-    title: "Inteligencia artificial",
-    description: "Proveedor, modelo y costo máximo por tarea de IA.",
-    phase: 9,
-  },
   {
     key: "integrations",
     icon: Plug,
@@ -116,6 +110,22 @@ export default async function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Link href="/settings/ai">
+          <Card className="h-full gap-2 transition-colors hover:border-primary/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Bot className="size-4 text-muted-foreground" />
+                Inteligencia artificial
+              </CardTitle>
+              <CardDescription>Proveedor y modelo de IA por tarea, costos y aprobaciones.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400">
+                Configurar
+              </Badge>
+            </CardContent>
+          </Card>
+        </Link>
         {upcomingSections.map((section) => (
           <Card key={section.key} className="gap-2">
             <CardHeader>
