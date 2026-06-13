@@ -13,7 +13,7 @@
 | **F4** | CRM contactos: tabla/kanban/perfil, búsqueda, filtros, tags, notas, timeline, score | ✅ |
 | **F5** | Pipeline: kanban drag & drop, forecast, comisiones, probabilidad | ✅ |
 | **F6** | Propiedades: CRUD, galería, grid/tabla/detalle, demo (Ensenada, CDMX, Valle de Guadalupe, Tijuana, Monterrey) | ✅ |
-| **F7** | Landing Page Engine: `/p/[slug]`, `/company/[slug]`, SEO/OG, form → contacto + oportunidad + UTM | Pendiente |
+| **F7** | Landing Page Engine: `/p/[slug]`, `/company/[slug]`, SEO/OG, form → contacto + oportunidad + UTM | ✅ |
 | **F8** | Inbox MVP: conversaciones demo, chat, filtros, asignación, adapters mock (WhatsApp/Email/IG/FB/WebChat) | Pendiente |
 | **F9** | AI Orchestrator MVP: providers/router/prompts/logs, MockProvider, UI de configuración en settings | Pendiente |
 | **F10** | Smart Matching MVP: score + razones + mensaje sugerido; en perfil de contacto y en propiedad | Pendiente |
