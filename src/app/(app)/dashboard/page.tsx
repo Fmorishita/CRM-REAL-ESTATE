@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { OnboardingChecklist } from "@/components/shared/onboarding-checklist";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { MODULES } from "@/config/modules";
@@ -38,6 +39,8 @@ export default async function DashboardPage() {
         description={`${today} · ${ctx.organization.name}`}
         actions={isDemoMode() ? <Badge variant="secondary">Datos demo</Badge> : null}
       />
+
+      <OnboardingChecklist />
 
       <DashboardStatsRow stats={data.stats} currency={data.currency} locale={locale} />
 
