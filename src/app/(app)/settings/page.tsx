@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Bot, Palette, Plug, Users } from "lucide-react";
+import { Bot, Palette, Plug, ScrollText, Users } from "lucide-react";
 
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { PageHeader } from "@/components/shared/page-header";
@@ -122,6 +122,22 @@ export default async function SettingsPage() {
             <CardContent>
               <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400">
                 Configurar
+              </Badge>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/settings/audit">
+          <Card className="h-full gap-2 transition-colors hover:border-primary/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <ScrollText className="size-4 text-muted-foreground" />
+                Auditoría y seguridad
+              </CardTitle>
+              <CardDescription>Registro de acciones sensibles y aislamiento por organización.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400">
+                Ver registro
               </Badge>
             </CardContent>
           </Card>

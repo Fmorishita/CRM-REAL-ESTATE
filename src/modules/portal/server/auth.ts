@@ -7,6 +7,7 @@ import { z } from "zod";
 import { isDemoMode } from "@/lib/db";
 import { prisma } from "@/lib/db/prisma";
 import { PORTAL_COOKIE, type PortalSession } from "@/lib/portal/session";
+import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { fail, ok, type ActionResult } from "@/lib/result";
 import { DEMO_PORTAL_ACCOUNTS, type PortalType } from "@/modules/portal/accounts";
 
@@ -21,6 +22,12 @@ export async function portalLogin(input: unknown): Promise<ActionResult<void>> {
   const parsed = loginSchema.safeParse(input);
   if (!parsed.success) return fail("Ingresa un email válido.");
   const email = parsed.data.email.trim().toLowerCase();
+
+  // Throttle brute-force attempts: 10 per minute per IP.
+  const limit = rateLimit(await clientKey("portal-login"), 10, 60_000);
+  if (!limit.allowed) {
+    return fail(`Demasiados intentos. Espera ${limit.retryAfterSeconds}s e inténtalo de nuevo.`);
+  }
 
   let session: PortalSession | null = null;
 

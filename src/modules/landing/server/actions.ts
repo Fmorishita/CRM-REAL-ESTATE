@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { isDemoMode } from "@/lib/db";
 import { prisma } from "@/lib/db/prisma";
+import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { fail, ok, type ActionResult } from "@/lib/result";
 import { landingLeadSchema } from "@/modules/landing/schemas";
 
@@ -19,6 +20,12 @@ export async function submitLandingLead(input: unknown): Promise<ActionResult<vo
     return fail("Revisa los datos del formulario.", z.flattenError(parsed.error).fieldErrors);
   }
   const data = parsed.data;
+
+  // Throttle spam: 5 submissions per minute per IP.
+  const limit = rateLimit(await clientKey("landing-lead"), 5, 60_000);
+  if (!limit.allowed) {
+    return fail("Recibimos tu solicitud. Espera un momento antes de enviar otra.");
+  }
 
   if (isDemoMode()) {
     // Demo: acknowledge without persisting.
