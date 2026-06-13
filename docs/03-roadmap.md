@@ -30,7 +30,7 @@
 |------|-----------|
 | **F17** | Mobile experience tipo app: bottom nav, quick actions, click-to-WhatsApp, rutas ✅ |
 | **F18** | Security & audit: RLS verificado, RBAC real en todas las rutas, audit logs, rate limiting, sanitización ✅ |
-| **F19** | Integration-ready: adapters reales WhatsApp Business API, Meta Graph, Gmail, Google Calendar/Maps, webhooks (solo con credenciales por env) |
+| **F19** | Integration-ready: adapters reales WhatsApp Business API, Meta Graph, Gmail, Google Calendar/Maps, webhooks (solo con credenciales por env) ✅ |
 | **F20** | Polish & demo: onboarding, tour, microinteracciones, performance, README, demo story completa |
 
 ## V2

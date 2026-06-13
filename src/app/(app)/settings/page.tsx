@@ -48,13 +48,6 @@ const teamColumns: DataTableColumn<DemoTeamMember>[] = [
 
 const upcomingSections = [
   {
-    key: "integrations",
-    icon: Plug,
-    title: "Integraciones",
-    description: "WhatsApp Business, Meta, Gmail, Google Calendar y Maps.",
-    phase: 19,
-  },
-  {
     key: "branding",
     icon: Palette,
     title: "Branding",
@@ -138,6 +131,22 @@ export default async function SettingsPage() {
             <CardContent>
               <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400">
                 Ver registro
+              </Badge>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/settings/integrations">
+          <Card className="h-full gap-2 transition-colors hover:border-primary/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Plug className="size-4 text-muted-foreground" />
+                Integraciones
+              </CardTitle>
+              <CardDescription>WhatsApp, Meta, correo, calendario, mapas y webhooks salientes.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400">
+                Configurar
               </Badge>
             </CardContent>
           </Card>
