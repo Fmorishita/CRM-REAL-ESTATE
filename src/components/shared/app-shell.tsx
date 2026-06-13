@@ -1,4 +1,5 @@
 import { MobileNav } from "@/components/shared/mobile-nav";
+import { QuickActions } from "@/components/shared/quick-actions";
 import { Sidebar } from "@/components/shared/sidebar";
 import { Topbar } from "@/components/shared/topbar";
 import { MODULES, type ModuleDefinition, type ModuleKey } from "@/config/modules";
@@ -36,6 +37,7 @@ export function AppShell({ ctx, children }: AppShellProps) {
         <main className="flex-1 px-4 py-6 pb-24 lg:px-8 lg:py-8 lg:pb-8">{children}</main>
       </div>
       <MobileNav visibleModules={visibleModules} />
+      <QuickActions />
     </div>
   );
 }
