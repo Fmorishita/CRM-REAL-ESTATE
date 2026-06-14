@@ -1,0 +1,1018 @@
+// Realtor Pro CRM — database schema (Phase 2)
+// Conventions: every business table carries organizationId; money = Decimal(14,2) + ISO currency;
+// flexible per-tenant fields live in Json columns validated with Zod at the app boundary.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tenancy & identity
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Plan {
+  free
+  starter
+  pro
+  enterprise
+}
+
+model Organization {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  name            String
+  slug            String   @unique
+  country         String   @default("MX")
+  defaultCurrency String   @default("MXN") @map("default_currency")
+  defaultLocale   String   @default("es-MX") @map("default_locale")
+  timezone        String   @default("America/Mexico_City")
+  logoUrl         String?  @map("logo_url")
+  plan            Plan     @default(free)
+  planLimits      Json?    @map("plan_limits")
+  settings        Json?
+  branding        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  branches             Branch[]
+  teams                Team[]
+  memberships          Membership[]
+  roles                Role[]
+  auditLogs            AuditLog[]
+  contacts             Contact[]
+  tags                 Tag[]
+  notes                Note[]
+  activities           Activity[]
+  leadSources          LeadSource[]
+  savedSegments        SavedSegment[]
+  properties           Property[]
+  pipelines            Pipeline[]
+  opportunities        Opportunity[]
+  channelAccounts      ChannelAccount[]
+  conversations        Conversation[]
+  messages             Message[]
+  quickReplies         QuickReply[]
+  visits               Visit[]
+  tasks                Task[]
+  automations          Automation[]
+  automationRuns       AutomationRun[]
+  aiTaskConfigs        AiTaskConfig[]
+  aiLogs               AiLog[]
+  aiApprovals          AiApproval[]
+  landingPages         LandingPage[]
+  landingLeads         LandingLead[]
+  clientPortalAccounts ClientPortalAccount[]
+
+  @@map("organizations")
+}
+
+model Branch {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  address        String?
+  timezone       String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  teams        Team[]
+  memberships  Membership[]
+
+  @@index([organizationId])
+  @@map("branches")
+}
+
+model Team {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  branchId       String?  @map("branch_id") @db.Uuid
+  name           String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  memberships  Membership[]
+
+  @@index([organizationId])
+  @@map("teams")
+}
+
+model User {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  authId    String?  @unique @map("auth_id")
+  name      String
+  email     String   @unique
+  phone     String?
+  avatarUrl String?  @map("avatar_url")
+  locale    String   @default("es-MX")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  memberships Membership[]
+
+  @@map("users")
+}
+
+/// System roles have organizationId = null; per-org custom roles arrive in V2.
+model Role {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  key            String
+  name           String
+  permissions    String[]
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships  Membership[]
+
+  @@unique([organizationId, key])
+  @@map("roles")
+}
+
+enum MembershipStatus {
+  active
+  invited
+  suspended
+}
+
+model Membership {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  roleId         String           @map("role_id") @db.Uuid
+  teamId         String?          @map("team_id") @db.Uuid
+  branchId       String?          @map("branch_id") @db.Uuid
+  status         MembershipStatus @default(active)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  branch       Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  assignedContacts      Contact[]      @relation("ContactAssignee")
+  assignedOpportunities Opportunity[]  @relation("OpportunityAssignee")
+  assignedConversations Conversation[]
+  assignedVisits        Visit[]
+  assignedTasks         Task[]
+  assignedProperties    Property[]     @relation("PropertyAssignee")
+  notes                 Note[]
+  auditLogs             AuditLog[]
+  savedSegments         SavedSegment[]
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, status])
+  @@map("memberships")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  membershipId   String?  @map("membership_id") @db.Uuid
+  action         String
+  entityType     String?  @map("entity_type")
+  entityId       String?  @map("entity_id")
+  metadata       Json?
+  ip             String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership   Membership?  @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CRM
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ContactType {
+  buyer
+  seller
+  investor
+  renter
+  external_broker
+  referrer
+  developer
+}
+
+enum Urgency {
+  low
+  medium
+  high
+}
+
+model Contact {
+  id                   String      @id @default(uuid(7)) @db.Uuid
+  organizationId       String      @map("organization_id") @db.Uuid
+  type                 ContactType @default(buyer)
+  firstName            String      @map("first_name")
+  lastName             String      @map("last_name")
+  email                String?
+  phone                String?
+  whatsapp             String?
+  leadSourceId         String?     @map("lead_source_id") @db.Uuid
+  stage                String      @default("new")
+  assignedMembershipId String?     @map("assigned_membership_id") @db.Uuid
+  score                Int         @default(0)
+  closeProbability     Int?        @map("close_probability")
+  lastContactAt        DateTime?   @map("last_contact_at")
+  nextFollowUpAt       DateTime?   @map("next_follow_up_at")
+  customFields         Json?       @map("custom_fields")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+  deletedAt            DateTime?   @map("deleted_at")
+
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leadSource         LeadSource?           @relation(fields: [leadSourceId], references: [id], onDelete: SetNull)
+  assignedMembership Membership?           @relation("ContactAssignee", fields: [assignedMembershipId], references: [id], onDelete: SetNull)
+  preference         ContactPreference?
+  tags               ContactTag[]
+  properties         ContactProperty[]
+  opportunities      Opportunity[]
+  conversations      Conversation[]
+  visits             Visit[]
+  landingLeads       LandingLead[]
+  portalAccounts     ClientPortalAccount[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, assignedMembershipId])
+  @@index([organizationId, stage])
+  @@map("contacts")
+}
+
+model ContactPreference {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  contactId      String   @unique @map("contact_id") @db.Uuid
+  budgetMin      Decimal? @map("budget_min") @db.Decimal(14, 2)
+  budgetMax      Decimal? @map("budget_max") @db.Decimal(14, 2)
+  currency       String   @default("MXN")
+  zones          String[]
+  propertyTypes  String[] @map("property_types")
+  bedroomsMin    Int?     @map("bedrooms_min")
+  bathroomsMin   Int?     @map("bathrooms_min")
+  amenities      String[]
+  purchaseReason String?  @map("purchase_reason")
+  urgency        Urgency  @default(medium)
+  lifestyleNotes String?  @map("lifestyle_notes")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@map("contact_preferences")
+}
+
+model Tag {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  color          String   @default("zinc")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contacts     ContactTag[]
+
+  @@unique([organizationId, name])
+  @@map("tags")
+}
+
+model ContactTag {
+  contactId String   @map("contact_id") @db.Uuid
+  tagId     String   @map("tag_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@map("contact_tags")
+}
+
+/// Polymorphic notes: entityType + entityId point at contact/property/opportunity/visit/conversation.
+model Note {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  entityType     String   @map("entity_type")
+  entityId       String   @map("entity_id") @db.Uuid
+  membershipId   String?  @map("membership_id") @db.Uuid
+  body           String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership   Membership?  @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, entityType, entityId])
+  @@map("notes")
+}
+
+/// Unified timeline of everything that happens to an entity.
+model Activity {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  entityType     String   @map("entity_type")
+  entityId       String   @map("entity_id") @db.Uuid
+  membershipId   String?  @map("membership_id") @db.Uuid
+  kind           String
+  payload        Json?
+  occurredAt     DateTime @default(now()) @map("occurred_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, entityType, entityId, occurredAt])
+  @@map("activities")
+}
+
+enum LeadSourceKind {
+  facebook
+  google
+  portal
+  referral
+  landing
+  walk_in
+  other
+}
+
+model LeadSource {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  name           String
+  kind           LeadSourceKind @default(other)
+  utmDefaults    Json?          @map("utm_defaults")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contacts     Contact[]
+
+  @@unique([organizationId, name])
+  @@map("lead_sources")
+}
+
+model SavedSegment {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  membershipId   String   @map("membership_id") @db.Uuid
+  entity         String
+  name           String
+  filters        Json
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership   Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, membershipId])
+  @@map("saved_segments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Properties
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PropertyType {
+  house
+  apartment
+  land
+  office
+  retail
+  warehouse
+  development
+  presale
+  vacation_rental
+  rental
+}
+
+enum OperationType {
+  sale
+  rent
+  presale
+}
+
+enum PropertyStatus {
+  available
+  reserved
+  sold
+  rented
+  paused
+}
+
+model Property {
+  id                   String         @id @default(uuid(7)) @db.Uuid
+  organizationId       String         @map("organization_id") @db.Uuid
+  title                String
+  slug                 String
+  description          String?
+  propertyType         PropertyType   @map("property_type")
+  operation            OperationType  @default(sale)
+  status               PropertyStatus @default(available)
+  price                Decimal        @db.Decimal(14, 2)
+  currency             String         @default("MXN")
+  address              Json?
+  lat                  Float?
+  lng                  Float?
+  zone                 String?
+  city                 String?
+  state                String?
+  country              String         @default("MX")
+  bedrooms             Int?
+  bathrooms            Float?
+  parking              Int?
+  lotSizeM2            Float?         @map("lot_size_m2")
+  builtM2              Float?         @map("built_m2")
+  amenities            String[]
+  commissionPct        Float?         @map("commission_pct")
+  sharedCommissionPct  Float?         @map("shared_commission_pct")
+  developerName        String?        @map("developer_name")
+  assignedMembershipId String?        @map("assigned_membership_id") @db.Uuid
+  availableFrom        DateTime?      @map("available_from")
+  deliveryDate         DateTime?      @map("delivery_date")
+  developmentStage     String?        @map("development_stage")
+  tags                 String[]
+  customFields         Json?          @map("custom_fields")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+  deletedAt            DateTime?      @map("deleted_at")
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedMembership Membership?        @relation("PropertyAssignee", fields: [assignedMembershipId], references: [id], onDelete: SetNull)
+  media              PropertyMedia[]
+  documents          PropertyDocument[]
+  views              PropertyView[]
+  contacts           ContactProperty[]
+  opportunities      Opportunity[]
+  visits             Visit[]
+  landingPages       LandingPage[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, status])
+  @@index([organizationId, propertyType, operation])
+  @@map("properties")
+}
+
+enum MediaKind {
+  photo
+  video
+  tour
+  plan
+}
+
+model PropertyMedia {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  propertyId     String    @map("property_id") @db.Uuid
+  kind           MediaKind @default(photo)
+  url            String
+  position       Int       @default(0)
+  alt            String?
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, position])
+  @@map("property_media")
+}
+
+enum DocumentVisibility {
+  internal
+  client
+  public
+}
+
+model PropertyDocument {
+  id             String             @id @default(uuid(7)) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  propertyId     String             @map("property_id") @db.Uuid
+  name           String
+  url            String
+  visibility     DocumentVisibility @default(internal)
+  createdAt      DateTime           @default(now()) @map("created_at")
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_documents")
+}
+
+/// Landing page analytics: one row per public property view.
+model PropertyView {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  propertyId     String   @map("property_id") @db.Uuid
+  source         String?
+  utm            Json?
+  viewedAt       DateTime @default(now()) @map("viewed_at")
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, propertyId, viewedAt])
+  @@map("property_views")
+}
+
+enum ContactPropertyRelation {
+  favorite
+  viewed
+  recommended
+  visited
+  offered
+}
+
+model ContactProperty {
+  contactId  String                  @map("contact_id") @db.Uuid
+  propertyId String                  @map("property_id") @db.Uuid
+  relation   ContactPropertyRelation
+  score      Int?
+  createdAt  DateTime                @default(now()) @map("created_at")
+
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, propertyId, relation])
+  @@index([propertyId, relation])
+  @@map("contact_properties")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pipeline
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Pipeline {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  isDefault      Boolean  @default(false) @map("is_default")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stages        PipelineStage[]
+  opportunities Opportunity[]
+
+  @@index([organizationId])
+  @@map("pipelines")
+}
+
+model PipelineStage {
+  id          String  @id @default(uuid(7)) @db.Uuid
+  pipelineId  String  @map("pipeline_id") @db.Uuid
+  key         String
+  name        String
+  position    Int
+  probability Int     @default(0)
+  isWon       Boolean @default(false) @map("is_won")
+  isLost      Boolean @default(false) @map("is_lost")
+
+  pipeline      Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+
+  @@unique([pipelineId, key])
+  @@index([pipelineId, position])
+  @@map("pipeline_stages")
+}
+
+enum RiskLevel {
+  low
+  medium
+  high
+}
+
+model Opportunity {
+  id                   String     @id @default(uuid(7)) @db.Uuid
+  organizationId       String     @map("organization_id") @db.Uuid
+  pipelineId           String     @map("pipeline_id") @db.Uuid
+  stageId              String     @map("stage_id") @db.Uuid
+  contactId            String     @map("contact_id") @db.Uuid
+  propertyId           String?    @map("property_id") @db.Uuid
+  title                String
+  amount               Decimal    @db.Decimal(14, 2)
+  currency             String     @default("MXN")
+  commissionAmount     Decimal?   @map("commission_amount") @db.Decimal(14, 2)
+  probability          Int        @default(0)
+  expectedCloseDate    DateTime?  @map("expected_close_date")
+  assignedMembershipId String?    @map("assigned_membership_id") @db.Uuid
+  lostReason           String?    @map("lost_reason")
+  aiScore              Int?       @map("ai_score")
+  aiRisk               RiskLevel? @map("ai_risk")
+  aiNextAction         String?    @map("ai_next_action")
+  closedAt             DateTime?  @map("closed_at")
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
+  deletedAt            DateTime?  @map("deleted_at")
+
+  organization       Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline           Pipeline      @relation(fields: [pipelineId], references: [id])
+  stage              PipelineStage @relation(fields: [stageId], references: [id])
+  contact            Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  property           Property?     @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  assignedMembership Membership?   @relation("OpportunityAssignee", fields: [assignedMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, stageId])
+  @@index([organizationId, assignedMembershipId])
+  @@index([organizationId, expectedCloseDate])
+  @@map("opportunities")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Omnichannel inbox
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Channel {
+  whatsapp
+  email
+  instagram
+  facebook
+  webchat
+}
+
+enum ChannelStatus {
+  mock
+  connected
+  error
+}
+
+model ChannelAccount {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  channel        Channel
+  name           String
+  status         ChannelStatus @default(mock)
+  credentialsRef String?       @map("credentials_ref")
+  settings       Json?
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@index([organizationId, channel])
+  @@map("channel_accounts")
+}
+
+enum ConversationStatus {
+  new
+  open
+  waiting_customer
+  needs_attention
+  closed
+}
+
+enum Priority {
+  low
+  normal
+  high
+}
+
+model Conversation {
+  id                   String             @id @default(uuid(7)) @db.Uuid
+  organizationId       String             @map("organization_id") @db.Uuid
+  channelAccountId     String             @map("channel_account_id") @db.Uuid
+  contactId            String?            @map("contact_id") @db.Uuid
+  externalId           String?            @map("external_id")
+  status               ConversationStatus @default(new)
+  priority             Priority           @default(normal)
+  assignedMembershipId String?            @map("assigned_membership_id") @db.Uuid
+  lastMessageAt        DateTime?          @map("last_message_at")
+  aiSummary            String?            @map("ai_summary")
+  aiSentiment          String?            @map("ai_sentiment")
+  aiIntent             String?            @map("ai_intent")
+  unreadCount          Int                @default(0) @map("unread_count")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  organization       Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channelAccount     ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+  contact            Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  assignedMembership Membership?    @relation(fields: [assignedMembershipId], references: [id], onDelete: SetNull)
+  messages           Message[]
+
+  @@index([organizationId, status, lastMessageAt])
+  @@index([organizationId, assignedMembershipId])
+  @@map("conversations")
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+enum MessageAuthor {
+  contact
+  member
+  ai
+  system
+}
+
+enum MessageStatus {
+  queued
+  sent
+  delivered
+  read
+  failed
+}
+
+model Message {
+  id                 String           @id @default(uuid(7)) @db.Uuid
+  organizationId     String           @map("organization_id") @db.Uuid
+  conversationId     String           @map("conversation_id") @db.Uuid
+  direction          MessageDirection
+  authorType         MessageAuthor    @map("author_type")
+  authorMembershipId String?          @map("author_membership_id") @db.Uuid
+  body               String
+  media              Json?
+  externalId         String?          @map("external_id")
+  status             MessageStatus    @default(sent)
+  sentAt             DateTime         @default(now()) @map("sent_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, sentAt])
+  @@map("messages")
+}
+
+model QuickReply {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  title          String
+  body           String
+  channel        Channel?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("quick_replies")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Visits & tasks
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum VisitStatus {
+  pending
+  confirmed
+  en_route
+  done
+  no_show
+  rescheduled
+  cancelled
+}
+
+model Visit {
+  id                   String      @id @default(uuid(7)) @db.Uuid
+  organizationId       String      @map("organization_id") @db.Uuid
+  contactId            String      @map("contact_id") @db.Uuid
+  propertyId           String      @map("property_id") @db.Uuid
+  assignedMembershipId String?     @map("assigned_membership_id") @db.Uuid
+  scheduledAt          DateTime    @map("scheduled_at")
+  durationMin          Int         @default(60) @map("duration_min")
+  status               VisitStatus @default(pending)
+  notes                String?
+  feedback             String?
+  checklist            Json?
+  routeOrder           Int?        @map("route_order")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact            Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  property           Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  assignedMembership Membership?  @relation(fields: [assignedMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, scheduledAt])
+  @@index([organizationId, assignedMembershipId, status])
+  @@map("visits")
+}
+
+enum TaskPriority {
+  low
+  medium
+  high
+}
+
+model Task {
+  id                   String       @id @default(uuid(7)) @db.Uuid
+  organizationId       String       @map("organization_id") @db.Uuid
+  title                String
+  description          String?
+  dueAt                DateTime?    @map("due_at")
+  completedAt          DateTime?    @map("completed_at")
+  priority             TaskPriority @default(medium)
+  assignedMembershipId String?      @map("assigned_membership_id") @db.Uuid
+  entityType           String?      @map("entity_type")
+  entityId             String?      @map("entity_id") @db.Uuid
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedMembership Membership?  @relation(fields: [assignedMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, assignedMembershipId, dueAt])
+  @@map("tasks")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Automations
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AutomationStatus {
+  draft
+  active
+  inactive
+}
+
+model Automation {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  name           String
+  status         AutomationStatus @default(draft)
+  trigger        Json
+  conditions     Json?
+  actions        Json
+  templateKey    String?          @map("template_key")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs         AutomationRun[]
+
+  @@index([organizationId, status])
+  @@map("automations")
+}
+
+enum RunStatus {
+  success
+  failed
+  partial
+  skipped
+}
+
+model AutomationRun {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  automationId   String    @map("automation_id") @db.Uuid
+  triggerEntity  Json?     @map("trigger_entity")
+  status         RunStatus
+  steps          Json?
+  error          String?
+  startedAt      DateTime  @default(now()) @map("started_at")
+  finishedAt     DateTime? @map("finished_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  automation   Automation   @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, automationId, startedAt])
+  @@map("automation_runs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Orchestrator
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AiTaskConfig {
+  id               String   @id @default(uuid(7)) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  taskKey          String   @map("task_key")
+  provider         String   @default("mock")
+  model            String   @default("mock-1")
+  temperature      Float    @default(0.3)
+  maxCostUsd       Decimal? @map("max_cost_usd") @db.Decimal(10, 4)
+  promptOverride   String?  @map("prompt_override")
+  requiresApproval Boolean  @default(false) @map("requires_approval")
+  enabled          Boolean  @default(true)
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, taskKey])
+  @@map("ai_task_configs")
+}
+
+model AiLog {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  taskKey        String   @map("task_key")
+  provider       String
+  model          String
+  membershipId   String?  @map("membership_id") @db.Uuid
+  entityType     String?  @map("entity_type")
+  entityId       String?  @map("entity_id")
+  inputTokens    Int      @default(0) @map("input_tokens")
+  outputTokens   Int      @default(0) @map("output_tokens")
+  costUsd        Decimal? @map("cost_usd") @db.Decimal(10, 6)
+  latencyMs      Int?     @map("latency_ms")
+  status         String   @default("success")
+  qualityRating  Int?     @map("quality_rating")
+  error          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  approvals    AiApproval[]
+
+  @@index([organizationId, taskKey, createdAt])
+  @@map("ai_logs")
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+model AiApproval {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  aiLogId        String?        @map("ai_log_id") @db.Uuid
+  payload        Json
+  status         ApprovalStatus @default(pending)
+  resolvedById   String?        @map("resolved_by") @db.Uuid
+  resolvedAt     DateTime?      @map("resolved_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  aiLog        AiLog?       @relation(fields: [aiLogId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@map("ai_approvals")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Landing pages & customer portal
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum LandingKind {
+  property
+  company
+}
+
+model LandingPage {
+  id                String      @id @default(uuid(7)) @db.Uuid
+  organizationId    String      @map("organization_id") @db.Uuid
+  kind              LandingKind
+  propertyId        String?     @map("property_id") @db.Uuid
+  slug              String
+  template          String      @default("default")
+  isActive          Boolean     @default(true) @map("is_active")
+  hidePrice         Boolean     @default(false) @map("hide_price")
+  showExactLocation Boolean     @default(false) @map("show_exact_location")
+  ctaConfig         Json?       @map("cta_config")
+  seo               Json?
+  viewsCount        Int         @default(0) @map("views_count")
+  leadsCount        Int         @default(0) @map("leads_count")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property?     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  leads        LandingLead[]
+
+  @@unique([organizationId, slug])
+  @@index([slug])
+  @@map("landing_pages")
+}
+
+model LandingLead {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  landingPageId  String   @map("landing_page_id") @db.Uuid
+  contactId      String?  @map("contact_id") @db.Uuid
+  formData       Json     @map("form_data")
+  utm            Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  landingPage  LandingPage  @relation(fields: [landingPageId], references: [id], onDelete: Cascade)
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, landingPageId, createdAt])
+  @@map("landing_leads")
+}
+
+enum PortalType {
+  buyer
+  seller
+  investor
+}
+
+model ClientPortalAccount {
+  id             String     @id @default(uuid(7)) @db.Uuid
+  organizationId String     @map("organization_id") @db.Uuid
+  contactId      String     @map("contact_id") @db.Uuid
+  authId         String?    @unique @map("auth_id")
+  email          String
+  portalType     PortalType @map("portal_type")
+  status         String     @default("active")
+  lastLoginAt    DateTime?  @map("last_login_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+  @@map("client_portal_accounts")
+}
