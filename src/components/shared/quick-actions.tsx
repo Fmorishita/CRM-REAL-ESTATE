@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Building2,
   CalendarClock,
@@ -27,6 +27,7 @@ type Mode = "menu" | "task" | "note";
 /** Mobile field-agent quick actions: floating button → bottom sheet. */
 export function QuickActions() {
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
   const [mode, setMode] = React.useState<Mode>("menu");
   const [value, setValue] = React.useState("");
@@ -51,6 +52,10 @@ export function QuickActions() {
       toast.error(result.error);
     }
   }
+
+  // The inbox has its own composer pinned bottom-right; the FAB would cover the
+  // send button there, so hide it on that route.
+  if (pathname?.startsWith("/inbox")) return null;
 
   return (
     <Sheet

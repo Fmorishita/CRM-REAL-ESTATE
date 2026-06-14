@@ -34,7 +34,9 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
 
   const [data, options] = await Promise.all([getInboxData(ctx, filters), getInboxOptions(ctx)]);
 
-  const selectedId = pick(params, "c") ?? data.conversations[0]?.id ?? null;
+  // No auto-select: on mobile this lands the user on the conversation list first
+  // (a single pane), then tapping a chat opens it full-screen with a back button.
+  const selectedId = pick(params, "c") ?? null;
   const conversation = selectedId ? await getConversation(ctx, selectedId) : null;
 
   const baseParams = new URLSearchParams();
@@ -56,11 +58,11 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
         {isDemoMode() ? <Badge variant="secondary">Datos demo</Badge> : null}
       </div>
 
-      <div className="flex h-[calc(100dvh-12rem)] min-h-[520px] overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex h-[calc(100dvh-15rem)] min-h-[440px] overflow-hidden rounded-xl border border-border bg-card sm:h-[calc(100dvh-13rem)] lg:h-[calc(100dvh-12rem)] lg:min-h-[520px]">
         {/* List pane */}
         <div
           className={cn(
-            "w-full flex-col border-r border-border lg:flex lg:w-80 lg:shrink-0",
+            "w-full min-w-0 flex-col border-r border-border lg:flex lg:w-80 lg:shrink-0",
             hasSelection ? "hidden lg:flex" : "flex",
           )}
         >
@@ -73,14 +75,15 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
         </div>
 
         {/* Chat pane */}
-        <div className={cn("flex-1", hasSelection ? "flex" : "hidden lg:flex")}>
+        <div className={cn("min-w-0 flex-1", hasSelection ? "flex" : "hidden lg:flex")}>
           {conversation ? (
-            <div className="w-full">
+            <div className="w-full min-w-0">
               <ConversationView
                 conversation={conversation}
                 options={options}
                 persist={!isDemoMode() && canReply}
                 canReply={canReply}
+                backHref={`/inbox${baseQuery ? `?${baseQuery}` : ""}`}
               />
             </div>
           ) : (

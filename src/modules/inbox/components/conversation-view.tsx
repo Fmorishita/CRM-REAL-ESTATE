@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Building2,
   CheckSquare,
+  ChevronLeft,
   Loader2,
   Send,
   Sparkles,
@@ -56,11 +57,14 @@ export function ConversationView({
   options,
   persist,
   canReply,
+  backHref,
 }: {
   conversation: ConversationDetail;
   options: InboxOptions;
   persist: boolean;
   canReply: boolean;
+  /** Mobile-only "back to list" link; clears the selected conversation. */
+  backHref?: string;
 }) {
   const router = useRouter();
   const [messages, setMessages] = React.useState<ChatMessage[]>(conversation.messages);
@@ -149,27 +153,34 @@ export function ConversationView({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Avatar className="size-9">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5 sm:px-4 sm:py-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+          {backHref ? (
+            <Button asChild variant="ghost" size="icon" className="-ml-1 size-8 shrink-0 lg:hidden">
+              <Link href={backHref} aria-label="Volver a la lista de conversaciones">
+                <ChevronLeft />
+              </Link>
+            </Button>
+          ) : null}
+          <Avatar className="size-9 shrink-0">
             <AvatarFallback className="text-xs">{getInitials(conversation.contactName)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="truncate font-medium text-foreground">{conversation.contactName}</span>
-              <ChannelIcon channel={conversation.channel} />
+              <ChannelIcon channel={conversation.channel} className="shrink-0" />
             </div>
             <span className="text-xs text-muted-foreground">{channelLabel(conversation.channel)}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Select
             defaultValue={conversation.status}
             onValueChange={(v) =>
               runAction(setConversationStatus({ conversationId: conversation.id, status: v }), "Estado actualizado.")
             }
           >
-            <SelectTrigger size="sm" className="w-auto min-w-32">
+            <SelectTrigger size="sm" className="hidden w-auto min-w-32 sm:flex">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -184,10 +195,28 @@ export function ConversationView({
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
                 <Zap />
-                Acciones
+                <span className="hidden sm:inline">Acciones</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
+              {/* On phones the status selector lives here instead of the header. */}
+              <DropdownMenuLabel className="sm:hidden">Estado</DropdownMenuLabel>
+              {Object.entries(CONVERSATION_STATUS_LABELS).map(([key, label]) => (
+                <DropdownMenuItem
+                  key={key}
+                  className="sm:hidden"
+                  onClick={() =>
+                    runAction(
+                      setConversationStatus({ conversationId: conversation.id, status: key }),
+                      "Estado actualizado.",
+                    )
+                  }
+                >
+                  <CheckSquare />
+                  {label}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator className="sm:hidden" />
               <DropdownMenuLabel>Asignar a</DropdownMenuLabel>
               <DropdownMenuItem
                 onClick={() => runAction(assignConversation({ conversationId: conversation.id, membershipId: null }), "Conversación sin asignar.")}
