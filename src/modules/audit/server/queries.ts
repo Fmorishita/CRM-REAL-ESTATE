@@ -20,6 +20,7 @@ const ACTION_LABELS: Record<string, string> = {
   "automation.create": "Creó una automatización",
   "automation.delete": "Eliminó una automatización",
   "ai.configure": "Configuró la IA",
+  "team.invite": "Invitó a un miembro",
 };
 
 function label(action: string): string {

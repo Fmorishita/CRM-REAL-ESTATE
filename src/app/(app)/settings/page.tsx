@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MODULES } from "@/config/modules";
 import { ROLE_LABELS } from "@/config/permissions";
-import { getTenantContext } from "@/lib/auth/session";
+import { getTenantContext, hasPermission } from "@/lib/auth/session";
+import { isDemoMode } from "@/lib/db";
 import type { DemoTeamMember } from "@/lib/demo/session";
+import { InviteTeammate } from "@/modules/organizations/components/invite-teammate";
 import { listTeam } from "@/modules/organizations/server/team";
 
 export const metadata: Metadata = { title: MODULES.settings.label };
@@ -60,6 +62,8 @@ export default async function SettingsPage() {
   const ctx = await getTenantContext();
   const org = ctx.organization;
   const team = await listTeam(org.id);
+  const pendingCount = team.filter((member) => member.status === "invited").length;
+  const canManageTeam = hasPermission(ctx, "users.manage");
 
   const orgFacts = [
     { label: "Nombre", value: org.name },
@@ -94,10 +98,18 @@ export default async function SettingsPage() {
       </Card>
 
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Users className="size-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">Equipo</h2>
-          <Badge variant="secondary">{team.length} miembros</Badge>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Users className="size-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-foreground">Equipo</h2>
+            <Badge variant="secondary">{team.length} miembros</Badge>
+            {pendingCount > 0 ? (
+              <Badge variant="outline" className="text-amber-600 dark:text-amber-400">
+                {pendingCount} pendientes
+              </Badge>
+            ) : null}
+          </div>
+          {canManageTeam ? <InviteTeammate demo={isDemoMode()} /> : null}
         </div>
         <DataTable columns={teamColumns} data={team} getRowId={(member) => member.id} />
       </div>

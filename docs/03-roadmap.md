@@ -38,6 +38,8 @@
 | Fase | Entregable | Estado |
 |------|-----------|--------|
 | **F21** | Autenticación real (Supabase Auth): sign-in/sign-out, sesión httpOnly, refresh en middleware, tenant por usuario; opt-in con `AUTH_ENABLED` | ✅ |
+| **F22** | Invitaciones de equipo: invitar por email + rol (membership `invited`), gate `users.manage`, conteo de pendientes, auditoría; demo-safe | ✅ |
+| **—** | Pulido móvil del Inbox (paneles, back, header compacto) + ocultar FAB redundante | ✅ |
 
 Backlog V2:
 
