@@ -1,6 +1,15 @@
 /** AI Orchestrator — provider-agnostic types. */
 
-export type AiProviderId = "mock" | "anthropic" | "openai" | "gemini" | "grok" | "deepseek";
+export type AiProviderId =
+  | "mock"
+  | "anthropic"
+  | "openai"
+  | "gemini"
+  | "grok"
+  | "deepseek"
+  | "openrouter"
+  | "groq"
+  | "ollama";
 
 export const AI_TASK_KEYS = [
   "summarize_conversation",

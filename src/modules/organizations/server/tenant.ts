@@ -67,6 +67,23 @@ export async function resolveTenantFromDb(): Promise<TenantContext> {
 }
 
 /**
+ * On sign-in, accept any pending invitations for this email: link the Supabase
+ * auth id to the app user and flip `invited` memberships to `active`. Safe to call
+ * repeatedly; a no-op when there is nothing pending.
+ */
+export async function activateInvitedMemberships(email: string, authId: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+  if (!user) return;
+  if (!user.authId) {
+    await prisma.user.update({ where: { id: user.id }, data: { authId } });
+  }
+  await prisma.membership.updateMany({
+    where: { userId: user.id, status: "invited" },
+    data: { status: "active" },
+  });
+}
+
+/**
  * Resolves the tenant context for an authenticated user, matched by email. The
  * active organization is the user's first active membership unless a preferred
  * org id (e.g. from a tenant switcher cookie) is supplied and still valid.

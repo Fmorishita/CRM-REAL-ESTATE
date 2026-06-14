@@ -25,10 +25,10 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
   {
     id: "openai",
     label: "OpenAI",
-    implemented: false,
+    implemented: true,
     models: [
-      { provider: "openai", id: "gpt-5", label: "GPT-5", inputCostPer1M: 5, outputCostPer1M: 15, implemented: false },
-      { provider: "openai", id: "gpt-5-mini", label: "GPT-5 mini", inputCostPer1M: 0.5, outputCostPer1M: 1.5, implemented: false },
+      { provider: "openai", id: "gpt-5", label: "GPT-5", inputCostPer1M: 5, outputCostPer1M: 15, implemented: true },
+      { provider: "openai", id: "gpt-5-mini", label: "GPT-5 mini", inputCostPer1M: 0.5, outputCostPer1M: 1.5, implemented: true },
     ],
   },
   {
@@ -46,8 +46,43 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
   {
     id: "deepseek",
     label: "DeepSeek",
-    implemented: false,
-    models: [{ provider: "deepseek", id: "deepseek-v3", label: "DeepSeek V3", inputCostPer1M: 0.3, outputCostPer1M: 1.2, implemented: false }],
+    implemented: true,
+    models: [
+      { provider: "deepseek", id: "deepseek-chat", label: "DeepSeek V3 (chat)", inputCostPer1M: 0.27, outputCostPer1M: 1.1, implemented: true },
+      { provider: "deepseek", id: "deepseek-reasoner", label: "DeepSeek R1 (reasoner)", inputCostPer1M: 0.55, outputCostPer1M: 2.19, implemented: true },
+    ],
+  },
+  {
+    // Free, very fast hosting of open-source models. Great default for cheap tasks.
+    id: "groq",
+    label: "Groq (open source, gratis)",
+    implemented: true,
+    models: [
+      { provider: "groq", id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B", inputCostPer1M: 0, outputCostPer1M: 0, implemented: true },
+      { provider: "groq", id: "llama-3.1-8b-instant", label: "Llama 3.1 8B (instant)", inputCostPer1M: 0, outputCostPer1M: 0, implemented: true },
+      { provider: "groq", id: "qwen-2.5-32b", label: "Qwen 2.5 32B", inputCostPer1M: 0, outputCostPer1M: 0, implemented: true },
+    ],
+  },
+  {
+    // One key, hundreds of models (many `:free`) — paid and open source.
+    id: "openrouter",
+    label: "OpenRouter (multi-modelo)",
+    implemented: true,
+    models: [
+      { provider: "openrouter", id: "meta-llama/llama-3.3-70b-instruct:free", label: "Llama 3.3 70B (free)", inputCostPer1M: 0, outputCostPer1M: 0, implemented: true },
+      { provider: "openrouter", id: "qwen/qwen-2.5-72b-instruct", label: "Qwen 2.5 72B", inputCostPer1M: 0.4, outputCostPer1M: 0.4, implemented: true },
+      { provider: "openrouter", id: "deepseek/deepseek-chat", label: "DeepSeek V3 (via OpenRouter)", inputCostPer1M: 0.27, outputCostPer1M: 1.1, implemented: true },
+    ],
+  },
+  {
+    // Local / self-hosted models. Fully free and private; set OLLAMA_BASE_URL.
+    id: "ollama",
+    label: "Ollama (local, gratis)",
+    implemented: true,
+    models: [
+      { provider: "ollama", id: "llama3.1", label: "Llama 3.1 (local)", inputCostPer1M: 0, outputCostPer1M: 0, implemented: true },
+      { provider: "ollama", id: "qwen2.5", label: "Qwen 2.5 (local)", inputCostPer1M: 0, outputCostPer1M: 0, implemented: true },
+    ],
   },
 ];
 

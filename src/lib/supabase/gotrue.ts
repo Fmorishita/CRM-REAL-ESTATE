@@ -64,6 +64,56 @@ export async function signInWithPassword(email: string, password: string): Promi
   }
 }
 
+interface SignUpResponse {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  expires_at?: number;
+  user?: { id: string; email?: string | null };
+  id?: string;
+  email?: string | null;
+}
+
+export interface GoTrueSignUpResult {
+  user: GoTrueUser | null;
+  /** Null when the project requires email confirmation (no session until confirmed). */
+  session: GoTrueSession | null;
+}
+
+export async function signUpWithPassword(email: string, password: string): Promise<GoTrueSignUpResult | null> {
+  const base = authBase();
+  if (!base) return null;
+  try {
+    const res = await fetch(`${base.url}/auth/v1/signup`, {
+      method: "POST",
+      headers: { apikey: base.anonKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as SignUpResponse;
+
+    const userObj = data.user ?? (data.id ? { id: data.id, email: data.email } : undefined);
+    const user: GoTrueUser | null = userObj ? { id: userObj.id, email: (userObj.email ?? email).toLowerCase() } : null;
+
+    const session =
+      data.access_token && data.refresh_token && userObj
+        ? toSession({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+            expires_in: data.expires_in,
+            expires_at: data.expires_at,
+            user: { id: userObj.id, email: userObj.email },
+          })
+        : null;
+
+    return { user, session };
+  } catch (error) {
+    console.error("signUpWithPassword failed:", error);
+    return null;
+  }
+}
+
 export async function refreshSession(refreshToken: string): Promise<GoTrueSession | null> {
   const base = authBase();
   if (!base) return null;

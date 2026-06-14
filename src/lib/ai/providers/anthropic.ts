@@ -1,6 +1,6 @@
 import "server-only";
 
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 
 import { estimateCost } from "@/lib/ai/registry";
 import type { AiCompletionRequest, AiProvider, AiResponse } from "@/lib/ai/types";
@@ -8,10 +8,15 @@ import type { AiCompletionRequest, AiProvider, AiResponse } from "@/lib/ai/types
 // Models that reject sampling parameters (temperature/top_p/top_k → 400).
 const NO_TEMPERATURE = /^claude-(opus-4-8|opus-4-7|fable)/;
 
-let client: Anthropic | null = null;
-function getClient(): Anthropic {
-  if (!client) client = new Anthropic();
-  return client;
+// The SDK is loaded lazily so it is code-split out of the server bundle and only
+// pulled in when a real Anthropic completion runs (never in mock/demo mode),
+// keeping serverless cold starts light.
+let clientPromise: Promise<Anthropic> | null = null;
+function getClient(): Promise<Anthropic> {
+  if (!clientPromise) {
+    clientPromise = import("@anthropic-ai/sdk").then((m) => new m.default());
+  }
+  return clientPromise;
 }
 
 export const anthropicProvider: AiProvider = {
@@ -39,7 +44,7 @@ export const anthropicProvider: AiProvider = {
       params.temperature = config.temperature;
     }
 
-    const response = await getClient().messages.create(params);
+    const response = await (await getClient()).messages.create(params);
     const text = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)

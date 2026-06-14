@@ -39,6 +39,9 @@
 |------|-----------|--------|
 | **F21** | Autenticación real (Supabase Auth): sign-in/sign-out, sesión httpOnly, refresh en middleware, tenant por usuario; opt-in con `AUTH_ENABLED` | ✅ |
 | **F22** | Invitaciones de equipo: invitar por email + rol (membership `invited`), gate `users.manage`, conteo de pendientes, auditoría; demo-safe | ✅ |
+| **F23** | Signup + provisión de organización (owner) y aceptación de invitaciones al iniciar sesión (P0) | ✅ |
+| **F24** | IA multi-proveedor open-source: adaptador OpenAI-compatible (Groq, OpenRouter, DeepSeek, Ollama, OpenAI) por tarea; SDK Anthropic lazy | ✅ |
+| **—** | Performance: `loading.tsx` en todas las rutas (skeletons al navegar) + cold-start más ligero | ✅ |
 | **—** | Pulido móvil del Inbox (paneles, back, header compacto) + ocultar FAB redundante | ✅ |
 
 Backlog V2:

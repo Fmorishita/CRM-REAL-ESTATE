@@ -17,7 +17,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; confirm?: string }>;
 }) {
   // In demo mode there is no sign-in; the app is open with the demo tenant.
   if (!isAuthEnabled()) redirect("/dashboard");
@@ -25,6 +25,12 @@ export default async function LoginPage({
   const user = await getAuthUser();
   if (user) redirect("/dashboard");
 
-  const { error } = await searchParams;
-  return <LoginForm initialError={error ? (ERROR_MESSAGES[error] ?? null) : null} />;
+  const { error, confirm } = await searchParams;
+  const notice = confirm
+    ? "Cuenta creada. Revisa tu correo para confirmar tu cuenta y luego inicia sesión."
+    : null;
+
+  return (
+    <LoginForm initialError={error ? (ERROR_MESSAGES[error] ?? null) : null} initialNotice={notice} />
+  );
 }
