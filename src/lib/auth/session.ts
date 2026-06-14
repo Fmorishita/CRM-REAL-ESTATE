@@ -1,21 +1,44 @@
 import "server-only";
 
+import { redirect } from "next/navigation";
+
 import type { Permission } from "@/config/permissions";
+import { isAuthEnabled } from "@/lib/auth/config";
+import { getAuthUser } from "@/lib/auth/current-user";
 import type { TenantContext } from "@/lib/auth/types";
 import { isDemoMode } from "@/lib/db";
 import { demoTenantContext } from "@/lib/demo/session";
-import { resolveTenantFromDb } from "@/modules/organizations/server/tenant";
+import { resolveTenantForEmail, resolveTenantFromDb } from "@/modules/organizations/server/tenant";
 
 /**
  * Resolves the tenant context for the current request.
  *
- * Reads from the database unless demo mode is on. If the lookup fails (e.g. the
- * database is unreachable during a build or before seeding), it falls back to the
- * seeded demo tenant so the app never hard-crashes. Supabase Auth will later
- * replace the "default owner" lookup with the signed-in user's session.
+ * - **Auth enabled** (Supabase configured, demo off): derives the tenant from the
+ *   signed-in user's session, redirecting to `/login` when there is no valid
+ *   session or membership. It never falls back to a demo/owner context here —
+ *   that would grant access without a real membership.
+ * - **Demo mode**: returns the seeded demo tenant so the app runs with zero config.
+ * - **DB without auth**: legacy default-owner lookup, with a demo fallback if the
+ *   database is unreachable (e.g. during a build).
+ *
  * Tenancy is never derived from client input.
  */
 export async function getTenantContext(): Promise<TenantContext> {
+  if (isAuthEnabled()) {
+    const authUser = await getAuthUser();
+    if (!authUser) redirect("/login");
+
+    let ctx: TenantContext | null = null;
+    try {
+      ctx = await resolveTenantForEmail(authUser.email);
+    } catch (error) {
+      console.error("Tenant resolution failed for authenticated user:", error);
+      redirect("/login?error=unavailable");
+    }
+    if (!ctx) redirect("/login?error=no-access");
+    return ctx;
+  }
+
   if (isDemoMode()) {
     return demoTenantContext();
   }

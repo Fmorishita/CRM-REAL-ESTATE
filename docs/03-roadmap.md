@@ -33,7 +33,13 @@
 | **F19** | Integration-ready: adapters reales WhatsApp Business API, Meta Graph, Gmail, Google Calendar/Maps, webhooks (solo con credenciales por env) ✅ |
 | **F20** | Polish & demo: onboarding, tour, microinteracciones, performance, README, demo story completa ✅ |
 
-## V2
+## V2 (en progreso)
+
+| Fase | Entregable | Estado |
+|------|-----------|--------|
+| **F21** | Autenticación real (Supabase Auth): sign-in/sign-out, sesión httpOnly, refresh en middleware, tenant por usuario; opt-in con `AUTH_ENABLED` | ✅ |
+
+Backlog V2:
 
 - Workspaces y branches activos en UI; roles personalizados por organización
 - Documents module completo (Drive/Dropbox/OneDrive)

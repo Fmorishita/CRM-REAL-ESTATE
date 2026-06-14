@@ -65,3 +65,46 @@ export async function resolveTenantFromDb(): Promise<TenantContext> {
     organizations: allMemberships.map((m) => toOrganization(m.organization)),
   };
 }
+
+/**
+ * Resolves the tenant context for an authenticated user, matched by email. The
+ * active organization is the user's first active membership unless a preferred
+ * org id (e.g. from a tenant switcher cookie) is supplied and still valid.
+ * Returns null when the email maps to no active membership — the caller then
+ * denies access instead of falling back to any demo/owner context.
+ */
+export async function resolveTenantForEmail(
+  email: string,
+  preferredOrgId?: string,
+): Promise<TenantContext | null> {
+  const memberships = await prisma.membership.findMany({
+    where: { status: "active", user: { email } },
+    include: { organization: true, user: true, role: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (memberships.length === 0) return null;
+
+  const active =
+    (preferredOrgId ? memberships.find((m) => m.organizationId === preferredOrgId) : undefined) ??
+    memberships[0]!;
+
+  return {
+    organization: toOrganization(active.organization),
+    user: {
+      id: active.user.id,
+      name: active.user.name,
+      email: active.user.email,
+      avatarUrl: active.user.avatarUrl ?? undefined,
+    },
+    membership: {
+      id: active.id,
+      organizationId: active.organizationId,
+      userId: active.userId,
+      role: active.role.key as Role,
+      status: active.status,
+    },
+    role: active.role.key as Role,
+    permissions: active.role.permissions as Permission[],
+    organizations: memberships.map((m) => toOrganization(m.organization)),
+  };
+}

@@ -63,7 +63,8 @@
 
 ## Pending / future
 
-- Real authentication (Supabase Auth) replaces the demo owner/session — the
-  tenant-context resolver and portal session are isolated for a drop-in swap.
+- ✅ Real authentication (Supabase Auth) implemented in Phase 21 (opt-in via
+  `AUTH_ENABLED`); see `docs/11-authentication.md`. Sign-in resolves the tenant
+  from the signed-in user's membership, with no demo fallback in auth mode.
 - Per-org custom roles (schema already supports it).
 - Distributed rate limiting and WAF at the edge for production scale.

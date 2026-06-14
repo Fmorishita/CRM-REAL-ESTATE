@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import Link from "next/link";
 import { LogOut, Settings, UserRound } from "lucide-react";
 
@@ -15,14 +16,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getInitials } from "@/lib/format";
+import { signOutAction } from "@/modules/auth/server/actions";
 
 interface UserMenuProps {
   name: string;
   email: string;
   roleLabel: string;
+  /** When false (demo mode), sign-out is disabled — there is no real session. */
+  authEnabled: boolean;
 }
 
-export function UserMenu({ name, email, roleLabel }: UserMenuProps) {
+export function UserMenu({ name, email, roleLabel, authEnabled }: UserMenuProps) {
+  const signOutFormRef = useRef<HTMLFormElement>(null);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -54,11 +60,25 @@ export function UserMenu({ name, email, roleLabel }: UserMenuProps) {
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        {/* Real sign-out arrives with Supabase Auth in Phase 2. */}
-        <DropdownMenuItem disabled>
-          <LogOut />
-          Cerrar sesión
-        </DropdownMenuItem>
+        {authEnabled ? (
+          <>
+            <form ref={signOutFormRef} action={signOutAction} className="hidden" />
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault();
+                signOutFormRef.current?.requestSubmit();
+              }}
+            >
+              <LogOut />
+              Cerrar sesión
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <DropdownMenuItem disabled>
+            <LogOut />
+            Cerrar sesión
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -8,11 +8,12 @@ import type { TenantContext } from "@/lib/auth/types";
 
 interface AppShellProps {
   ctx: TenantContext;
+  authEnabled: boolean;
   children: React.ReactNode;
 }
 
 /** Authenticated application frame: sidebar (desktop), topbar, bottom nav (mobile). */
-export function AppShell({ ctx, children }: AppShellProps) {
+export function AppShell({ ctx, authEnabled, children }: AppShellProps) {
   const visibleModules = (Object.keys(MODULES) as ModuleKey[]).filter((key) => {
     const { permission }: ModuleDefinition = MODULES[key];
     return permission === undefined || ctx.permissions.includes(permission);
@@ -32,6 +33,7 @@ export function AppShell({ ctx, children }: AppShellProps) {
           userName={ctx.user.name}
           userEmail={ctx.user.email}
           roleLabel={ROLE_LABELS[ctx.role]}
+          authEnabled={authEnabled}
           visibleModules={visibleModules}
         />
         <main className="flex-1 px-4 py-6 pb-24 lg:px-8 lg:py-8 lg:pb-8">{children}</main>
