@@ -2,6 +2,7 @@ import { MobileNav } from "@/components/shared/mobile-nav";
 import { QuickActions } from "@/components/shared/quick-actions";
 import { Sidebar } from "@/components/shared/sidebar";
 import { Topbar } from "@/components/shared/topbar";
+import { ViewAsBanner } from "@/components/shared/view-as-banner";
 import { MODULES, type ModuleDefinition, type ModuleKey } from "@/config/modules";
 import { ROLE_LABELS } from "@/config/permissions";
 import type { TenantContext } from "@/lib/auth/types";
@@ -21,6 +22,12 @@ export function AppShell({ ctx, authEnabled, children }: AppShellProps) {
 
   const organizations = ctx.organizations.map(({ id, name, plan }) => ({ id, name, plan }));
 
+  // "Ver como" reflects the previewed role while keeping the real permissions as
+  // the source of truth for who may control the preview.
+  const realPermissions = ctx.viewAs?.realPermissions ?? ctx.permissions;
+  const canViewAs = realPermissions.includes("users.manage");
+  const viewAsRole = ctx.viewAs ? ctx.role : null;
+
   return (
     <div className="min-h-dvh bg-background">
       <Sidebar
@@ -29,11 +36,14 @@ export function AppShell({ ctx, authEnabled, children }: AppShellProps) {
         visibleModules={visibleModules}
       />
       <div className="flex min-h-dvh flex-col lg:pl-60">
+        {ctx.viewAs ? <ViewAsBanner role={ctx.role} realRole={ctx.viewAs.realRole} /> : null}
         <Topbar
           userName={ctx.user.name}
           userEmail={ctx.user.email}
           roleLabel={ROLE_LABELS[ctx.role]}
           authEnabled={authEnabled}
+          canViewAs={canViewAs}
+          viewAsRole={viewAsRole}
           visibleModules={visibleModules}
         />
         <main className="flex-1 px-4 py-6 pb-24 lg:px-8 lg:py-8 lg:pb-8">{children}</main>

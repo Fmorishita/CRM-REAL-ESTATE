@@ -2,8 +2,8 @@ import { ROLE_PERMISSIONS } from "@/config/permissions";
 import type { Membership, Organization, SessionUser, TenantContext } from "@/lib/auth/types";
 
 /**
- * Demo tenant used until Supabase Auth lands in Phase 2.
- * Mirrors the shape the real session resolver will return.
+ * Demo tenant served when auth is off / no database is configured (see
+ * `isAuthEnabled`). Mirrors the shape the real session resolver returns.
  */
 
 export const DEMO_ORGANIZATIONS: Organization[] = [

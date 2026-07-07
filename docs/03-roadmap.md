@@ -41,6 +41,7 @@
 | **F22** | Invitaciones de equipo: invitar por email + rol (membership `invited`), gate `users.manage`, conteo de pendientes, auditoría; demo-safe | ✅ |
 | **F23** | Signup + provisión de organización (owner) y aceptación de invitaciones al iniciar sesión (P0) | ✅ |
 | **F24** | IA multi-proveedor open-source: adaptador OpenAI-compatible (Groq, OpenRouter, DeepSeek, Ollama, OpenAI) por tarea; SDK Anthropic lazy | ✅ |
+| **F25** | "Ver como" — vista previa de solo lectura de un rol inferior (owner/admin), banner + submenú, sin escalación de permisos | ✅ |
 | **—** | Performance: `loading.tsx` en todas las rutas (skeletons al navegar) + cold-start más ligero | ✅ |
 | **—** | Pulido móvil del Inbox (paneles, back, header compacto) + ocultar FAB redundante | ✅ |
 

@@ -6,12 +6,14 @@ import type { Permission } from "@/config/permissions";
 import { isAuthEnabled } from "@/lib/auth/config";
 import { getAuthUser } from "@/lib/auth/current-user";
 import type { TenantContext } from "@/lib/auth/types";
+import { applyViewAs, readViewAsRole } from "@/lib/auth/view-as";
 import { isDemoMode } from "@/lib/db";
 import { demoTenantContext } from "@/lib/demo/session";
 import { resolveTenantForEmail, resolveTenantFromDb } from "@/modules/organizations/server/tenant";
 
 /**
- * Resolves the tenant context for the current request.
+ * Resolves the *real* tenant context for the current request (ignoring any
+ * "ver como" preview).
  *
  * - **Auth enabled** (Supabase configured, demo off): derives the tenant from the
  *   signed-in user's session, redirecting to `/login` when there is no valid
@@ -23,7 +25,7 @@ import { resolveTenantForEmail, resolveTenantFromDb } from "@/modules/organizati
  *
  * Tenancy is never derived from client input.
  */
-export async function getTenantContext(): Promise<TenantContext> {
+export async function getRealTenantContext(): Promise<TenantContext> {
   if (isAuthEnabled()) {
     const authUser = await getAuthUser();
     if (!authUser) redirect("/login");
@@ -50,12 +52,28 @@ export async function getTenantContext(): Promise<TenantContext> {
   }
 }
 
+/**
+ * The context used to render and gate the app. Same as the real context, plus a
+ * read-only "ver como" role preview when the user has one active.
+ */
+export async function getTenantContext(): Promise<TenantContext> {
+  const real = await getRealTenantContext();
+  return applyViewAs(real, await readViewAsRole());
+}
+
 export function hasPermission(ctx: TenantContext, permission: Permission): boolean {
   return ctx.permissions.includes(permission);
 }
 
-/** Guard for server actions and services. Throws when the permission is missing. */
+/**
+ * Guard for server actions and services. Throws when the permission is missing,
+ * and always throws while a read-only "ver como" preview is active so a preview
+ * can never mutate data.
+ */
 export function requirePermission(ctx: TenantContext, permission: Permission): void {
+  if (ctx.viewAs) {
+    throw new Error("Vista previa de solo lectura: sal de la vista previa para hacer cambios.");
+  }
   if (!hasPermission(ctx, permission)) {
     throw new Error(`Permiso denegado: ${permission}`);
   }
