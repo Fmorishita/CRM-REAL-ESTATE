@@ -38,4 +38,10 @@ export interface TenantContext {
   permissions: Permission[];
   /** Other organizations the user belongs to (for the tenant switcher). */
   organizations: Organization[];
+  /**
+   * Present when the user is previewing the app as a lower role ("ver como").
+   * `role`/`permissions` above are the previewed ones; these are the real ones.
+   * Read-only: mutations are blocked while previewing.
+   */
+  viewAs?: { realRole: Role; realPermissions: Permission[] };
 }
