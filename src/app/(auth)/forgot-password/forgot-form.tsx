@@ -21,8 +21,8 @@ export function ForgotPasswordForm() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="items-center space-y-2 text-center">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
-          {sent ? <MailCheck className="size-5 text-primary" /> : <KeyRound className="size-5 text-primary" />}
+        <div className="flex size-10 items-center justify-center rounded-xl bg-gold/15">
+          {sent ? <MailCheck className="size-5 text-gold" /> : <KeyRound className="size-5 text-primary" />}
         </div>
         <CardTitle>{sent ? "Revisa tu correo" : "Recuperar contraseña"}</CardTitle>
         <CardDescription>

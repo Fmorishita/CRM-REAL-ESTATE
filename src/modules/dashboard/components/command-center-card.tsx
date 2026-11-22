@@ -17,7 +17,7 @@ export function CommandCenterCard({ items }: { items: CommandItem[] }) {
   return (
     <Card className="gap-0">
       <CardHeader>
-        <CardTitle>Today Command Center</CardTitle>
+        <CardTitle>Prioridades de hoy</CardTitle>
         <CardDescription>Tus prioridades de hoy para mover oportunidades.</CardDescription>
       </CardHeader>
       <div className="px-2 pb-2">

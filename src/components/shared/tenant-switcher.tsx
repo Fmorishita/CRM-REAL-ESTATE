@@ -20,13 +20,6 @@ interface TenantSwitcherProps {
   className?: string;
 }
 
-const PLAN_LABELS: Record<Organization["plan"], string> = {
-  free: "Free",
-  starter: "Starter",
-  pro: "Pro",
-  enterprise: "Enterprise",
-};
-
 export function TenantSwitcher({ organizations, activeOrganizationId, className }: TenantSwitcherProps) {
   const active = organizations.find((org) => org.id === activeOrganizationId);
 
@@ -35,21 +28,21 @@ export function TenantSwitcher({ organizations, activeOrganizationId, className 
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className={cn("h-auto w-full justify-start gap-2.5 px-2 py-2", className)}
+          className={cn("h-auto w-full justify-start gap-2.5 px-2 py-2 hover:bg-sidebar-accent", className)}
           aria-label="Cambiar organización"
         >
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gold text-gold-foreground shadow-sm">
             <Building className="size-4" />
           </div>
           <div className="flex min-w-0 flex-1 flex-col items-start">
-            <span className="w-full truncate text-left text-sm font-semibold text-foreground">
+            <span className="w-full truncate text-left font-heading text-lg leading-tight font-semibold text-sidebar-foreground">
               {active?.name ?? "Organización"}
             </span>
-            <span className="text-xs text-muted-foreground">
-              Plan {active ? PLAN_LABELS[active.plan] : ""}
+            <span className="text-[11px] tracking-wide text-sidebar-foreground/55">
+              Realtor Pro CRM
             </span>
           </div>
-          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
+          <ChevronsUpDown className="size-4 shrink-0 text-sidebar-foreground/50" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">

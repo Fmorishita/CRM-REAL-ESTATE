@@ -22,7 +22,7 @@ export function HotLeadsCard({ leads }: { leads: HotLead[] }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Flame className="size-4 text-red-500" />
-          Hot Leads
+          Leads calientes
         </CardTitle>
         <CardDescription>Tus prospectos con mayor probabilidad de cierre.</CardDescription>
         <CardAction>

@@ -147,16 +147,19 @@ export interface NavSection {
 
 /** Desktop sidebar structure. */
 export const SIDEBAR_SECTIONS: NavSection[] = [
-  { items: ["dashboard", "inbox", "contacts", "pipeline"] },
+  { items: ["dashboard", "inbox", "leads", "contacts", "pipeline"] },
+  { label: "Marketing", items: ["social"] },
   { label: "Operación", items: ["properties", "visits", "automations"] },
   { label: "Inteligencia", items: ["analytics", "copilot"] },
 ];
 
 /** Primary tabs of the mobile bottom navigation; the rest goes into the "Más" sheet. */
-export const MOBILE_NAV_ITEMS: ModuleKey[] = ["dashboard", "inbox", "contacts", "visits"];
+export const MOBILE_NAV_ITEMS: ModuleKey[] = ["dashboard", "inbox", "leads", "contacts"];
 
 export const MOBILE_MORE_ITEMS: ModuleKey[] = [
   "pipeline",
+  "visits",
+  "social",
   "properties",
   "automations",
   "analytics",

@@ -4,33 +4,33 @@ import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ArrowRight, Rocket, X } from "lucide-react";
 
-const STORAGE_KEY = "rp_onboarding_dismissed_v1";
+const STORAGE_KEY = "rp_onboarding_dismissed_v2";
 
 const STEPS: { href: string; title: string; description: string }[] = [
   {
-    href: "/inbox",
-    title: "Revisa el Inbox",
-    description: "Conversaciones de WhatsApp, correo y redes en un solo lugar.",
+    href: "/settings/integrations",
+    title: "Conecta WhatsApp, Instagram y Messenger",
+    description: "Carga las credenciales de Meta para recibir los leads de tus anuncios.",
   },
   {
-    href: "/pipeline",
-    title: "Explora el Pipeline",
-    description: "Arrastra oportunidades entre etapas y revisa tu forecast.",
+    href: "/settings",
+    title: "Invita a tus asesores",
+    description: "Agrégalos y márcalos para recibir leads en reparto automático.",
+  },
+  {
+    href: "/leads",
+    title: "Revisa tus leads",
+    description: "Origen por anuncio, las 5 respuestas de precalificación y costo por lead.",
   },
   {
     href: "/properties",
-    title: "Recorre tu inventario",
-    description: "Propiedades con galería, score y matching de compradores.",
-  },
-  {
-    href: "/settings/integrations",
-    title: "Conecta tus canales",
-    description: "Activa WhatsApp, Meta, correo y calendario con tus credenciales.",
+    title: "Carga tu inventario",
+    description: "Las casas de Punta Pacífico con precios y disponibilidad oficiales.",
   },
   {
     href: "/settings/ai",
-    title: "Configura la IA",
-    description: "Elige proveedor y modelo por tarea. Empieza en modo mock.",
+    title: "Activa la IA",
+    description: "Groq gratis para leer chats y sugerir respuestas.",
   },
 ];
 
