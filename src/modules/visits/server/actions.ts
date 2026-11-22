@@ -9,6 +9,7 @@ import { isDemoMode } from "@/lib/db";
 import { prisma } from "@/lib/db/prisma";
 import { fail, ok, type ActionResult } from "@/lib/result";
 import { VISIT_STATUSES } from "@/config/visits";
+import { reportMilestone } from "@/modules/leadops/server/capi";
 
 const DEMO_ERROR = "Acción no disponible en modo demo. Configura la base de datos para guardar cambios.";
 
@@ -54,6 +55,8 @@ export async function createVisit(input: unknown): Promise<ActionResult<{ id: st
       },
     });
     await auditLog(ctx, "visit.create", { type: "visit", id: visit.id });
+    // Lead → appointment: Meta learns which ads bring visits (Schedule; once per contact).
+    await reportMilestone(ctx.organization.id, data.contactId, "visit_scheduled");
     revalidatePath("/visits");
     return ok({ id: visit.id });
   } catch (error) {

@@ -3,9 +3,18 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
-import { eventKey, type InboundMessageEvent, type StatusEvent, type WhatsAppEvent } from "@/lib/leadops/whatsapp-webhook";
+import { extractFactsFromText } from "@/lib/leadops/qualification";
+import {
+  eventKey,
+  type EchoEvent,
+  type InboundMessageEvent,
+  type StatusEvent,
+  type WhatsAppEvent,
+} from "@/lib/leadops/whatsapp-webhook";
 import { pickAssignee } from "@/lib/leadops/rules";
+import { phoneVariants } from "@/lib/leadops/web-form";
 import { reportMilestone } from "@/modules/leadops/server/capi";
+import { applyFacts } from "@/modules/leadops/server/facts";
 
 /**
  * Turns verified WhatsApp webhook events into CRM state:
@@ -35,7 +44,7 @@ async function resolveChannel(phoneNumberId: string): Promise<ChannelRoute | nul
   });
 }
 
-async function chooseAssignee(organizationId: string): Promise<{ membershipId: string | null; reason: "auto_equitable" | "auto_weighted" }> {
+export async function chooseAssignee(organizationId: string): Promise<{ membershipId: string | null; reason: "auto_equitable" | "auto_weighted" }> {
   const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { settings: true } });
   const settings = (org?.settings ?? {}) as { leadDistribution?: string };
   const mode = settings.leadDistribution === "weighted" ? "weighted" : "equitable";
@@ -80,6 +89,25 @@ async function handleMessage(e: InboundMessageEvent, route: ChannelRoute): Promi
   if (!waId) throw new Error("inbound message without sender identity");
 
   let contact = await prisma.contact.findUnique({ where: { organizationId_waId: { organizationId, waId } } });
+  if (!contact && e.waId) {
+    // Same person who first left the website form (10-digit / 52 / 521 spellings):
+    // join that contact instead of creating a duplicate, and adopt WhatsApp's id.
+    const variants = phoneVariants(e.waId);
+    const match = await prisma.contact.findFirst({
+      where: {
+        organizationId,
+        deletedAt: null,
+        OR: [{ waId: { in: variants } }, { phone: { in: variants } }, { whatsapp: { in: variants } }],
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    if (match) {
+      contact = await prisma.contact.update({
+        where: { id: match.id },
+        data: { waId, whatsapp: e.waId, whatsappName: e.profileName ?? match.whatsappName, bsuid: match.bsuid ?? e.bsuid },
+      });
+    }
+  }
   const isNew = !contact;
 
   if (!contact) {
@@ -187,7 +215,68 @@ async function handleMessage(e: InboundMessageEvent, route: ChannelRoute): Promi
     }),
   ]);
 
-  if (isNew) await reportMilestone(organizationId, contact.id, "lead_created");
+  // Idempotent per contact: also covers a form lead who later clicks a WhatsApp ad.
+  if (isNew || e.referral?.ctwaClid) await reportMilestone(organizationId, contact.id, "lead_created");
+
+  // Free, deterministic capture of explicit answers ("3 recámaras", "de contado"…).
+  // Advisor corrections always win; ambiguous text is left for a human or the AI.
+  if (e.type === "text" || e.type === "button" || e.type === "interactive") {
+    const facts = extractFactsFromText(e.text);
+    if (Object.keys(facts).length > 0) await applyFacts(organizationId, contact.id, facts, "system");
+  }
+}
+
+/**
+ * Coexistence echo: the advisor answered from the WhatsApp Business app on the
+ * phone. Mirrored as a human outbound message and the bot switches off. Echoes
+ * for chats that are not leads in the CRM (personal chats on the business phone)
+ * are ignored on purpose, so they never become contacts.
+ */
+async function handleEcho(e: EchoEvent, route: ChannelRoute): Promise<boolean> {
+  const { organizationId } = route;
+  const contact = await prisma.contact.findUnique({ where: { organizationId_waId: { organizationId, waId: e.to } } });
+  if (!contact) return false;
+  const conversation = await prisma.conversation.findFirst({
+    where: { organizationId, contactId: contact.id, channelAccountId: route.id },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!conversation) return false;
+
+  await prisma.$transaction([
+    prisma.message.create({
+      data: {
+        organizationId,
+        conversationId: conversation.id,
+        direction: "outbound",
+        authorType: "member",
+        body: e.text,
+        externalId: e.messageId,
+        status: "sent",
+        sentAt: e.timestamp,
+        sentVia: "whatsapp_business_app",
+      },
+    }),
+    prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        lastMessageAt: e.timestamp,
+        unreadCount: 0,
+        status: conversation.status === "new" || conversation.status === "needs_attention" ? "open" : conversation.status,
+      },
+    }),
+    prisma.contact.update({
+      where: { id: contact.id },
+      data: {
+        lastOutboundAt: e.timestamp,
+        firstMemberReplyAt: contact.firstMemberReplyAt ?? e.timestamp,
+        attentionAt: null,
+        ...(contact.botEnabled
+          ? { botEnabled: false, botChangedAt: e.timestamp, botChangedReason: "human_reply_phone" }
+          : {}),
+      },
+    }),
+  ]);
+  return true;
 }
 
 async function handleStatus(e: StatusEvent, route: ChannelRoute): Promise<void> {
@@ -230,13 +319,15 @@ export async function ingestWhatsAppEvent(e: WhatsAppEvent): Promise<"processed"
   }
 
   try {
+    let handled = true;
     if (e.kind === "message") await handleMessage(e, route);
+    else if (e.kind === "echo") handled = await handleEcho(e, route);
     else await handleStatus(e, route);
     await prisma.webhookEvent.update({
       where: { id: stored.id },
-      data: { status: "processed", organizationId: route.organizationId, processedAt: new Date(), attempts: { increment: 1 } },
+      data: { status: handled ? "processed" : "ignored", organizationId: route.organizationId, processedAt: new Date(), attempts: { increment: 1 } },
     });
-    return "processed";
+    return handled ? "processed" : "ignored";
   } catch (error) {
     console.error("ingestWhatsAppEvent failed:", error);
     await prisma.webhookEvent.update({

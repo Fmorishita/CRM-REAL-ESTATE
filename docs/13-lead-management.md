@@ -62,6 +62,7 @@ Cron diario → Marketing API insights → ad_insights_daily → costo por lead 
 | `META_DATASET_ID`, `META_CAPI_ACCESS_TOKEN`, `META_CAPI_TEST_EVENT_CODE` (opcional) | Conversions API |
 | `META_ADS_ACCESS_TOKEN`, `META_AD_ACCOUNT_ID` | Gasto diario por anuncio |
 | `CRON_SECRET` | Protege el cron diario de insights |
+| `WEB_LEADS_SECRET` | Protege `/api/leads/web` (formulario web → CRM) |
 
 Sin estas variables todo queda apagado y se informa en `/leads` qué falta. Ninguna credencial se inventa.
 
@@ -71,17 +72,56 @@ Sin estas variables todo queda apagado y se informa en `/leads` qué falta. Ning
 |---|---|---|
 | 0 | Cierre funcional (decisiones de la sección 8), prueba con número de ensayo | Pendiente de Legacy Capital |
 | 1 | Modelo de datos de leads, reglas, webhook idempotente, atribución CTWA, reparto, CAPI, insights, vista `/leads` | **Hecho (código)**; falta activar credenciales |
-| 2 | Bandeja: plantillas aprobadas desde el chat fuera de ventana, adjuntos, controles BOT/REACT/archivar/bloquear en la ficha, filtros (atención, ventana, casas, estrellas) | Siguiente |
-| 3 | IA de atención con extracción estructurada a `contact_facts`, transferencia humana ("Atención"), FAQ/conocimiento versionado, reactivadores con reglas | Siguiente |
+| 2 | Bandeja: ficha del lead junto al chat (5 respuestas, estrellas, temperatura, BOT/REACT/archivar/bloquear), plantillas aprobadas fuera de ventana, errores de Meta visibles, palomitas de estado, filtros (humano, calientes, ventana), coexistencia | **Hecho (F27)**; faltan adjuntos |
+| 3 | Extracción de respuestas (palabras clave + IA), "Atención" al pedir cita, formulario web unido al mismo contacto | **Hecho (F27)**; faltan IA que responde sola, FAQ versionado y reactivadores |
 | 4 | Dashboard con definiciones explícitas, export Excel (5 hojas), piloto con 2 asesores | |
 | 5 | Plantillas y campañas masivas (importación, validación, reparto, pausa/cancelar, costo estimado) | |
 | 6 | Telefonía (opcional) · 7 Copiloto interno sobre métricas | |
 
-## 8. Decisiones abiertas (bloquean el piloto)
+## 8. Decisiones
 
-1. Número: coexistencia con la app actual o migración completa.
-2. Los 5 datos de precalificación de Legacy Capital (por defecto: nombre, uso, recámaras, presupuesto, intención de visita) y si el quinto es "intención" o "cita confirmada".
+Cerradas (22-nov-2026):
+
+1. **Número: coexistencia.** Se usa el número que ya tiene WhatsApp Business en el teléfono; app y Cloud API conviven.
+2. **Los 5 datos de precalificación** son las preguntas del formulario "Agenda tu cita" (ver §9).
+6. **Formulario web → CRM**: resuelto con `/api/leads/web` (ver §10).
+
+Abiertas:
+
 3. Reparto de los 2 asesores (equitativo o %), horario de guardia, y si el dueño recibe leads.
-4. Qué cuenta como "lead calificado" para enviarlo a Meta (hoy: ≥3 estrellas o ≥4 datos, o marcado a mano).
-5. Política tras intervención humana: ¿la IA vuelve sola tras X horas o solo manual?
-6. Unir los leads del formulario web (otro proyecto Supabase) al CRM.
+4. Confirmar la regla de "lead calificado" (hoy: ≥4 de 5 respuestas, ≥3 estrellas o marcado a mano).
+5. Política tras intervención humana: ¿la IA vuelve sola tras X horas o solo manual? (hoy: solo manual).
+
+## 9. Precalificación (Fase 27)
+
+Catálogo único en `src/lib/leadops/qualification.ts`, usado por formulario, chat, IA, ficha y métricas:
+
+| Llave | Pregunta | Opciones (valor guardado) |
+|---|---|---|
+| `bedrooms` | ¿Buscas casa de 2 o 3 recámaras? | 2 (`2`), 3 (`3`) |
+| `purpose` | Propósito (hasta 2) | Uso propio (`own_use`), Inversión (`investment`), Retiro (`retirement`) |
+| `financing` | ¿Cómo la vas a adquirir? | Crédito hipotecario (`mortgage`), Capital propio (`own_capital`), Ambos (`both`) |
+| `timeline` | ¿En qué plazo? | De inmediato (`immediate`), 1-3 meses (`1_3m`), 3-6 meses (`3_6m`), +6 meses (`6m_plus`) |
+| `contact_preference` | ¿Cómo prefieres que te contacte? | Visita en físico (`in_person`), Videollamada (`video_call`), WhatsApp (`whatsapp`), Email (`email`) |
+
+- **Fuentes y precedencia**: formulario (`form`), detección por palabras clave en el chat (`system`, gratis, solo frases explícitas; "2 o 3 recámaras" queda sin dato), IA (`ai`, botón "Leer chat con IA", responde solo con valores del catálogo) y asesor (`advisor`). **Nada automático sobrescribe una corrección del asesor.**
+- **Temperatura** (solo por respuestas): Caliente = compra de inmediato o en 1-3 meses **y** pide visita o videollamada; Tibio = ≤6 meses; Frío = +6 meses.
+- **Calificado** → `QualifiedLead` a Meta: ≥4 de 5 respuestas o ≥3 estrellas (una vez por contacto).
+- **Pide visita o videollamada** → se marca "Atención" para que un humano tome la conversación.
+- **Visita creada** en el módulo Visitas → `Schedule` a Meta.
+
+## 10. Formulario web de Punta Pacífico → CRM
+
+El sitio guarda cada lead en la tabla `leads` de su propio proyecto Supabase. Para que llegue al CRM sin tocar el código del sitio:
+
+1. Supabase (proyecto del sitio) → **Database → Webhooks → Create** · tabla `public.leads` · eventos **Insert** y **Update** · tipo HTTP **POST** a `https://realtorpro.vercel.app/api/leads/web`.
+2. Header `x-webhook-secret: <WEB_LEADS_SECRET>` (la misma cadena aleatoria que se pone en Vercel). Nunca se llama desde el navegador.
+3. El CRM entiende los códigos que guarda el sitio (`interes: "3R"`, `uso: "renta"`, `forma_pago: "credito"`, `horizonte_compra: "0-3"`, `modo_visita: "presencial"`) y también las etiquetas visibles.
+4. Une a la persona por teléfono (10 dígitos, 52 o 521) o email: si después escribe por WhatsApp, es **el mismo contacto**, con sus respuestas ya cargadas.
+
+## 11. Coexistencia (app WhatsApp Business + Cloud API)
+
+- Lo que el asesor escribe **desde la app del teléfono** llega como evento `smb_message_echoes`: el CRM lo muestra en el chat con la etiqueta "Teléfono", lo cuenta como respuesta humana y **apaga la IA** de ese chat. Ecos de chats que no son leads del CRM (personales) se ignoran.
+- Un eco **no abre ni extiende** la ventana de 24 h (solo el mensaje del cliente la abre).
+- Campos del webhook a suscribir: `messages` y `smb_message_echoes` (los de sincronización de historial/contactos no se usan todavía).
+- Requisitos de Meta a confirmar al activar: la incorporación de un número de la app se hace con el flujo de *Embedded Signup* para usuarios de WhatsApp Business app (app de Meta como Tech Provider, o mediante un BSP); el número debe estar activo en la app; algunas funciones de la app (p. ej. listas de difusión) dejan de estar disponibles; hay que abrir la app en el teléfono periódicamente para mantener el enlace. Verificar disponibilidad para México en la cuenta antes de mover nada.

@@ -57,9 +57,22 @@ export function ConversationList({
                 </div>
                 <p className="truncate text-xs text-muted-foreground">{c.snippet}</p>
                 <div className="mt-1 flex items-center gap-2">
-                  <span className={cn("text-[11px] font-medium", conversationStatusTone(c.status))}>
+                  <span className={cn("truncate text-[11px] font-medium", conversationStatusTone(c.status))}>
                     {c.assignedName ?? "Sin asignar"}
                   </span>
+                  {c.attention ? (
+                    <span className="shrink-0 rounded bg-destructive/10 px-1 text-[10px] font-medium text-destructive">Atención</span>
+                  ) : null}
+                  {c.windowOpen === false ? (
+                    <span className="shrink-0 rounded bg-amber-500/10 px-1 text-[10px] text-amber-700 dark:text-amber-400" title="Ventana de 24 h cerrada">
+                      24h
+                    </span>
+                  ) : null}
+                  {c.factsCount !== undefined ? (
+                    <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums" title="Datos de precalificación">
+                      {c.factsCount}/5
+                    </span>
+                  ) : null}
                   {c.unreadCount > 0 ? (
                     <span className="ml-auto flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
                       {c.unreadCount}

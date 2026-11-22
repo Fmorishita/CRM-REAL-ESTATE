@@ -7,6 +7,8 @@ import type { TenantContext } from "@/lib/auth/types";
 import { isDemoMode } from "@/lib/db";
 import { prisma } from "@/lib/db/prisma";
 import { formatCurrency, formatRelativeTime, formatTime } from "@/lib/format";
+import { parseFactValue } from "@/lib/leadops/qualification";
+import { SERVICE_WINDOW_MS, isServiceWindowOpen } from "@/lib/leadops/rules";
 import {
   DEFAULT_QUICK_REPLIES,
   DEMO_INBOX_OPTIONS,
@@ -21,10 +23,12 @@ import type {
   InboxData,
   InboxFilters,
   InboxOptions,
+  LeadFactState,
+  LeadState,
 } from "@/modules/inbox/types";
 
 const listInclude = {
-  contact: true,
+  contact: { include: { facts: { select: { key: true, value: true } } } },
   channelAccount: true,
   assignedMembership: { include: { user: true } },
   messages: { orderBy: { sentAt: "desc" }, take: 1 },
@@ -50,7 +54,37 @@ function toListItem(
     lastMessageLabel: c.lastMessageAt ? formatRelativeTime(c.lastMessageAt, locale) : null,
     unreadCount: c.unreadCount,
     assignedName: c.assignedMembership?.user.name ?? null,
+    ...(c.contact?.waId
+      ? {
+          attention: Boolean(c.contact.attentionAt),
+          windowOpen: isServiceWindowOpen(c.contact.lastInboundAt),
+          factsCount: c.contact.facts.length,
+        }
+      : {}),
   };
+}
+
+function leadWhere(lead: InboxFilters["lead"]): Prisma.ConversationWhereInput {
+  const windowStart = new Date(Date.now() - SERVICE_WINDOW_MS);
+  switch (lead) {
+    case "attention":
+      return { contact: { attentionAt: { not: null }, blockedAt: null } };
+    case "window_open":
+      return { contact: { lastInboundAt: { gte: windowStart }, blockedAt: null } };
+    case "window_closed":
+      return { contact: { waId: { not: null }, OR: [{ lastInboundAt: null }, { lastInboundAt: { lt: windowStart } }] } };
+    case "hot":
+      return {
+        contact: {
+          AND: [
+            { facts: { some: { key: "timeline", value: { in: ["immediate", "1_3m"] } } } },
+            { facts: { some: { key: "contact_preference", value: { in: ["in_person", "video_call"] } } } },
+          ],
+        },
+      };
+    default:
+      return {};
+  }
 }
 
 export async function getInboxData(ctx: TenantContext, filters: InboxFilters = {}): Promise<InboxData> {
@@ -62,6 +96,9 @@ export async function getInboxData(ctx: TenantContext, filters: InboxFilters = {
     if (filters.status) where.status = filters.status as never;
     if (filters.assignedMembershipId) where.assignedMembershipId = filters.assignedMembershipId;
     if (filters.unassigned) where.assignedMembershipId = null;
+    if (filters.lead) Object.assign(where, leadWhere(filters.lead));
+    // Archived leads leave the default view (archive only hides; nothing is deleted).
+    if (!filters.lead) where.OR = [{ contactId: null }, { contact: { archivedAt: null } }];
 
     const [rows, all, unassigned, needsAttention] = await Promise.all([
       prisma.conversation.findMany({ where, include: listInclude, orderBy: { lastMessageAt: "desc" }, take: 100 }),
@@ -88,7 +125,12 @@ export async function getConversation(ctx: TenantContext, id: string): Promise<C
     const c = await prisma.conversation.findFirst({
       where: { id, organizationId: ctx.organization.id },
       include: {
-        contact: true,
+        contact: {
+          include: {
+            facts: true,
+            attributions: { where: { isFirstTouch: true }, take: 1 },
+          },
+        },
         channelAccount: true,
         assignedMembership: { include: { user: true } },
         messages: { orderBy: { sentAt: "asc" }, take: 200, include: {} },
@@ -124,7 +166,36 @@ export async function getConversation(ctx: TenantContext, id: string): Promise<C
       body: m.body,
       timeLabel: formatTime(m.sentAt, locale, timezone),
       status: m.status,
+      sentVia: m.sentVia,
+      error: m.errorMessage,
     }));
+
+    const ct = c.contact;
+    const lead: LeadState | null =
+      ct && (ct.waId || c.channelAccount.channel === "whatsapp")
+        ? {
+            contactId: ct.id,
+            botEnabled: ct.botEnabled,
+            botChangedReason: ct.botChangedReason,
+            reactEnabled: ct.reactEnabled,
+            blocked: Boolean(ct.blockedAt),
+            archived: Boolean(ct.archivedAt),
+            attention: Boolean(ct.attentionAt),
+            windowOpen: isServiceWindowOpen(ct.lastInboundAt),
+            windowClosesAt:
+              ct.lastInboundAt && isServiceWindowOpen(ct.lastInboundAt)
+                ? new Date(ct.lastInboundAt.getTime() + SERVICE_WINDOW_MS).toISOString()
+                : null,
+            stars: ct.stars,
+            subStage: ct.subStage,
+            outcome: ct.outcome,
+            facts: ct.facts.map(
+              (f): LeadFactState => ({ key: f.key, values: parseFactValue(f.value), source: f.source }),
+            ),
+            origin: ct.attributions[0]?.channel ?? null,
+            adName: ct.attributions[0]?.adName ?? ct.attributions[0]?.headline ?? null,
+          }
+        : null;
 
     return {
       id: c.id,
@@ -146,6 +217,7 @@ export async function getConversation(ctx: TenantContext, id: string): Promise<C
         authorName: n.membership?.user.name ?? null,
         atLabel: formatRelativeTime(n.createdAt, locale),
       })),
+      lead,
     };
   } catch (error) {
     console.error("getConversation failed, falling back to demo data:", error);

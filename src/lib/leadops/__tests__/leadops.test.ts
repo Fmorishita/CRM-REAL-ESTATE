@@ -102,7 +102,7 @@ describe("assignment", () => {
 });
 
 describe("facts and CAPI", () => {
-  it("highest milestone counts each lead once", () => expect(highestFact(["name", "budget"])).toBe(4));
+  it("highest milestone counts each lead once", () => expect(highestFact(["bedrooms", "timeline"])).toBe(4));
   it("builds a business-messaging event with a deterministic id", () => {
     const e = buildCapiEvent({ trigger: "lead_qualified", contactId: "c1", ctwaClid: "CLID", eventTime: new Date(1000) }, "WABA");
     expect(e).toMatchObject({
@@ -110,5 +110,26 @@ describe("facts and CAPI", () => {
       action_source: "business_messaging", messaging_channel: "whatsapp",
       user_data: { whatsapp_business_account_id: "WABA", ctwa_clid: "CLID" },
     });
+  });
+});
+
+describe("coexistence echoes", () => {
+  it("parses smb_message_echoes as a human outbound message with its own idempotency key", () => {
+    const events = parseWhatsAppPayload({
+      object: "whatsapp_business_account",
+      entry: [{
+        changes: [{
+          field: "smb_message_echoes",
+          value: {
+            messaging_product: "whatsapp",
+            metadata: { phone_number_id: "PN1" },
+            message_echoes: [{ from: "5216460000000", to: "5216461111111", id: "wamid.E1", timestamp: "1700000000", type: "text", text: { body: "Hola, te marco en 5 min" } }],
+          },
+        }],
+      }],
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ kind: "echo", to: "5216461111111", text: "Hola, te marco en 5 min", phoneNumberId: "PN1" });
+    expect(eventKey(events[0]!)).toBe("echo:wamid.E1");
   });
 });

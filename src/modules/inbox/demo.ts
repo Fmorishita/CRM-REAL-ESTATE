@@ -7,7 +7,54 @@ import type {
   InboxData,
   InboxFilters,
   InboxOptions,
+  LeadState,
 } from "@/modules/inbox/types";
+
+/** Demo lead state so the lead panel can be explored without a database. */
+function demoLead(c: { contactId: string; channel: Channel }, index: number): LeadState | null {
+  if (c.channel !== "whatsapp") return null;
+  const presets: Pick<LeadState, "facts" | "stars" | "attention" | "botEnabled" | "botChangedReason" | "origin" | "adName">[] = [
+    {
+      facts: [
+        { key: "bedrooms", values: ["3"], source: "system" },
+        { key: "purpose", values: ["investment"], source: "form" },
+        { key: "financing", values: ["own_capital"], source: "advisor" },
+        { key: "timeline", values: ["1_3m"], source: "form" },
+        { key: "contact_preference", values: ["in_person"], source: "form" },
+      ],
+      stars: 4,
+      attention: true,
+      botEnabled: true,
+      botChangedReason: null,
+      origin: "ctwa_ad",
+      adName: "A — California",
+    },
+    {
+      facts: [
+        { key: "bedrooms", values: ["2"], source: "system" },
+        { key: "purpose", values: ["own_use", "retirement"], source: "ai" },
+      ],
+      stars: null,
+      attention: false,
+      botEnabled: false,
+      botChangedReason: "human_reply",
+      origin: "ctwa_ad",
+      adName: "C — Empresario",
+    },
+  ];
+  const p = presets[index % presets.length]!;
+  return {
+    contactId: c.contactId,
+    ...p,
+    reactEnabled: true,
+    blocked: false,
+    archived: false,
+    windowOpen: index % 2 === 0,
+    windowClosesAt: index % 2 === 0 ? new Date(Date.now() + 19 * 60 * 60 * 1000).toISOString() : null,
+    subStage: index % 2 === 0 ? "Visita por agendar" : null,
+    outcome: "open",
+  };
+}
 
 interface DemoConversation {
   id: string;
@@ -167,6 +214,7 @@ export function demoConversationDetail(id: string): ConversationDetail | null {
     aiSentiment: c.aiSentiment,
     messages,
     internalNotes: [],
+    lead: demoLead(c, DEMO_CONVERSATIONS.indexOf(c)),
   };
 }
 

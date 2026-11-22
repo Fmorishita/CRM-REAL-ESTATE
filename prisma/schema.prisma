@@ -789,6 +789,8 @@ model Message {
   statusAt           DateTime?        @map("status_at")
   errorCode          String?          @map("error_code")
   errorMessage       String?          @map("error_message")
+  /// "crm" | "whatsapp_business_app" (coexistence echo) | "template" | "automation".
+  sentVia            String?          @map("sent_via")
   sentAt             DateTime         @default(now()) @map("sent_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

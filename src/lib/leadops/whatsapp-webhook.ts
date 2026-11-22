@@ -50,7 +50,23 @@ export interface StatusEvent {
   errorMessage: string | null;
 }
 
-export type WhatsAppEvent = InboundMessageEvent | StatusEvent;
+/**
+ * Coexistence: a message the business sent from the WhatsApp Business app on the
+ * phone (field `smb_message_echoes`). It is a human reply, so the CRM mirrors it
+ * and switches the bot off. Echoes do not open or extend the 24h window.
+ */
+export interface EchoEvent {
+  kind: "echo";
+  phoneNumberId: string;
+  messageId: string;
+  /** Customer the business wrote to. */
+  to: string;
+  timestamp: Date;
+  type: string;
+  text: string;
+}
+
+export type WhatsAppEvent = InboundMessageEvent | StatusEvent | EchoEvent;
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj => (v && typeof v === "object" ? (v as Obj) : {});
@@ -113,10 +129,29 @@ export function parseWhatsAppPayload(body: unknown): WhatsAppEvent[] {
   for (const entry of arr(root.entry)) {
     for (const change of arr(obj(entry).changes)) {
       const c = obj(change);
-      if (c.field !== "messages") continue;
       const value = obj(c.value);
       const phoneNumberId = str(obj(value.metadata).phone_number_id);
       if (!phoneNumberId) continue;
+
+      if (c.field === "smb_message_echoes") {
+        for (const echo of arr(value.message_echoes)) {
+          const m = obj(echo);
+          const id = str(m.id);
+          const to = str(m.to);
+          if (!id || !to) continue;
+          events.push({
+            kind: "echo",
+            phoneNumberId,
+            messageId: id,
+            to,
+            timestamp: toDate(m.timestamp),
+            type: str(m.type) ?? "unknown",
+            text: messageText(m),
+          });
+        }
+        continue;
+      }
+      if (c.field !== "messages") continue;
 
       const contacts = arr(value.contacts).map(obj);
       for (const message of arr(value.messages)) {
@@ -164,5 +199,7 @@ export function parseWhatsAppPayload(body: unknown): WhatsAppEvent[] {
 
 /** Stable idempotency key per event (Meta can deliver the same event more than once). */
 export function eventKey(e: WhatsAppEvent): string {
-  return e.kind === "message" ? `msg:${e.messageId}` : `status:${e.messageId}:${e.status}`;
+  if (e.kind === "message") return `msg:${e.messageId}`;
+  if (e.kind === "echo") return `echo:${e.messageId}`;
+  return `status:${e.messageId}:${e.status}`;
 }

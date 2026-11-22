@@ -4,11 +4,18 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
+  Ban,
   Building2,
+  Check,
+  CheckCheck,
   CheckSquare,
   ChevronLeft,
+  Clock,
   Loader2,
+  PanelRight,
   Send,
+  Smartphone,
   Sparkles,
   StickyNote,
   User,
@@ -36,6 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { CONVERSATION_STATUS_LABELS, channelLabel } from "@/config/channels";
 import { getInitials } from "@/lib/format";
@@ -51,6 +59,8 @@ import {
   suggestReplyWithAi,
 } from "@/modules/inbox/server/actions";
 import type { ChatMessage, ConversationDetail, InboxOptions } from "@/modules/inbox/types";
+import { LeadPanel } from "@/modules/leadops/components/lead-panel";
+import { TemplatePicker, type TemplateOption } from "@/modules/leadops/components/template-picker";
 
 export function ConversationView({
   conversation,
@@ -58,6 +68,8 @@ export function ConversationView({
   persist,
   canReply,
   backHref,
+  templates = [],
+  templatesLive = false,
 }: {
   conversation: ConversationDetail;
   options: InboxOptions;
@@ -65,7 +77,14 @@ export function ConversationView({
   canReply: boolean;
   /** Mobile-only "back to list" link; clears the selected conversation. */
   backHref?: string;
+  /** Approved WhatsApp templates (outside the 24h window). */
+  templates?: TemplateOption[];
+  templatesLive?: boolean;
 }) {
+  const lead = conversation.lead;
+  const windowClosed = Boolean(lead && !lead.windowOpen);
+  const blocked = Boolean(lead?.blocked);
+  const firstName = conversation.contactName.split(" ")[0] ?? "";
   const router = useRouter();
   const [messages, setMessages] = React.useState<ChatMessage[]>(conversation.messages);
   const [syncKey, setSyncKey] = React.useState(conversation.id + conversation.messages.length);
@@ -174,6 +193,23 @@ export function ConversationView({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {lead ? (
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="xl:hidden" aria-label="Ver ficha del lead">
+                  <PanelRight />
+                  <span className="hidden sm:inline">Lead</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
+                <SheetHeader className="border-b border-border">
+                  <SheetTitle>{conversation.contactName}</SheetTitle>
+                  <SheetDescription>Precalificación y controles del lead</SheetDescription>
+                </SheetHeader>
+                <LeadPanel lead={lead} persist={persist} />
+              </SheetContent>
+            </Sheet>
+          ) : null}
           <Select
             defaultValue={conversation.status}
             onValueChange={(v) =>
@@ -328,13 +364,44 @@ export function ConversationView({
       ) : null}
 
       {/* Composer */}
-      {canReply ? (
+      {canReply && blocked ? (
+        <div className="flex items-center gap-2 border-t border-border bg-destructive/5 px-4 py-3 text-xs text-destructive">
+          <Ban className="size-4 shrink-0" />
+          Contacto bloqueado: no se le puede enviar ningún mensaje. Desbloquéalo en la ficha del lead.
+        </div>
+      ) : canReply ? (
         <div className="border-t border-border p-3">
+          {windowClosed ? (
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs">
+              <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                <Clock className="size-3.5 shrink-0" />
+                Ventana de 24 h cerrada: solo puedes enviar una plantilla aprobada.
+              </span>
+              <TemplatePicker
+                conversationId={conversation.id}
+                contactFirstName={firstName}
+                templates={templates}
+                live={templatesLive}
+                persist={persist}
+                variant="default"
+                label="Enviar plantilla"
+              />
+            </div>
+          ) : null}
           <div className="mb-2 flex flex-wrap items-center gap-1">
             <Button variant="outline" size="xs" onClick={onSuggest} disabled={suggesting}>
               {suggesting ? <Loader2 className="animate-spin" /> : <Wand2 />}
               Sugerir con IA
             </Button>
+            {lead && !windowClosed ? (
+              <TemplatePicker
+                conversationId={conversation.id}
+                contactFirstName={firstName}
+                templates={templates}
+                live={templatesLive}
+                persist={persist}
+              />
+            ) : null}
             {options.quickReplies.map((qr) => (
               <button
                 key={qr.id}
@@ -355,11 +422,12 @@ export function ConversationView({
                   void onSend();
                 }
               }}
-              placeholder="Escribe un mensaje… (⌘+Enter para enviar)"
+              placeholder={windowClosed ? "Ventana cerrada: usa una plantilla" : "Escribe un mensaje… (⌘+Enter para enviar)"}
+              disabled={windowClosed}
               rows={2}
               className="min-h-10 flex-1 resize-none"
             />
-            <Button onClick={onSend} disabled={sending || !body.trim()} size="icon">
+            <Button onClick={onSend} disabled={sending || !body.trim() || windowClosed} size="icon" aria-label="Enviar mensaje">
               {sending ? <Loader2 className="animate-spin" /> : <Send />}
             </Button>
           </div>
@@ -381,21 +449,52 @@ export function ConversationView({
   );
 }
 
+function StatusIcon({ status }: { status: string }) {
+  if (status === "read") return <CheckCheck className="size-3 text-sky-300" aria-label="Leído" />;
+  if (status === "delivered") return <CheckCheck className="size-3" aria-label="Entregado" />;
+  if (status === "sent") return <Check className="size-3" aria-label="Enviado" />;
+  return null;
+}
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   const outbound = message.direction === "outbound";
+  const failed = message.status === "failed";
   return (
     <div className={cn("flex", outbound ? "justify-end" : "justify-start")}>
       <div
         className={cn(
           "max-w-[78%] rounded-2xl px-3.5 py-2 text-sm",
-          outbound ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
+          failed
+            ? "border border-destructive/40 bg-destructive/10 text-foreground"
+            : outbound
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-foreground",
         )}
       >
         <p className="whitespace-pre-wrap">{message.body}</p>
-        <p className={cn("mt-1 text-[10px]", outbound ? "text-primary-foreground/70" : "text-muted-foreground")}>
+        <p
+          className={cn(
+            "mt-1 flex items-center gap-1 text-[10px]",
+            outbound && !failed ? "text-primary-foreground/70" : "text-muted-foreground",
+          )}
+        >
+          {message.sentVia === "whatsapp_business_app" ? (
+            <span className="inline-flex items-center gap-0.5" title="Enviado desde la app WhatsApp Business del teléfono">
+              <Smartphone className="size-3" />
+              Teléfono ·
+            </span>
+          ) : null}
+          {message.sentVia === "template" ? <span>Plantilla ·</span> : null}
           {message.authorName ? `${message.authorName} · ` : ""}
           {message.timeLabel}
+          {outbound && !failed ? <StatusIcon status={message.status} /> : null}
         </p>
+        {failed ? (
+          <p className="mt-1 flex items-start gap-1 text-[11px] text-destructive">
+            <AlertTriangle className="mt-px size-3 shrink-0" />
+            No entregado{message.error ? `: ${message.error}` : ""}
+          </p>
+        ) : null}
       </div>
     </div>
   );

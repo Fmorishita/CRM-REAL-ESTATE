@@ -52,6 +52,7 @@ ALTER TABLE "channel_accounts" ADD COLUMN     "external_id" TEXT;
 -- AlterTable
 ALTER TABLE "messages" ADD COLUMN     "error_code" TEXT,
 ADD COLUMN     "error_message" TEXT,
+ADD COLUMN     "sent_via" TEXT,
 ADD COLUMN     "status_at" TIMESTAMP(3);
 
 -- CreateTable

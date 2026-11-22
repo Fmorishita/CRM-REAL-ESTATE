@@ -1,3 +1,5 @@
+import { QUALIFICATION_KEYS, QUALIFICATION_QUESTIONS } from "@/lib/leadops/qualification";
+
 /**
  * Pure lead-operations rules shared by the inbox, webhook and automations.
  * Kept free of I/O so they are unit-tested and identical everywhere.
@@ -79,17 +81,11 @@ export function pickAssignee(
   return best.membershipId;
 }
 
-/** The five default qualification data points ("casas"). Configurable per org later. */
-export const DEFAULT_FACT_KEYS = ["name", "purpose", "bedrooms", "budget", "visit_intent"] as const;
-export type FactKey = (typeof DEFAULT_FACT_KEYS)[number];
+/** The five pre-qualification answers ("casas"), in form order. */
+export const DEFAULT_FACT_KEYS = QUALIFICATION_KEYS;
+export type FactKey = (typeof QUALIFICATION_KEYS)[number];
 
-export const FACT_LABELS: Record<FactKey, string> = {
-  name: "Nombre",
-  purpose: "Uso (vivir / invertir)",
-  bedrooms: "Recámaras",
-  budget: "Presupuesto",
-  visit_intent: "Intención de visita",
-};
+export const FACT_LABELS = Object.fromEntries(QUALIFICATION_QUESTIONS.map((q) => [q.key, q.label])) as Record<FactKey, string>;
 
 /** Counts captured data points. Independent flags, not a sequential funnel. */
 export function factsCompleted(keys: Iterable<string>): number {
@@ -112,4 +108,13 @@ export function normalizePhone(input: string | null | undefined): string | null 
   if (!input) return null;
   const digits = input.replace(/\D/g, "");
   return digits.length >= 8 ? digits : null;
+}
+
+/** Display format: "526463000000" → "+52 646 300 0000" (Mexico, with or without the mobile 1). */
+export function formatPhone(digits: string | null | undefined): string {
+  if (!digits) return "";
+  const d = digits.replace(/\D/g, "");
+  const local = d.length === 13 && d.startsWith("521") ? d.slice(3) : d.length === 12 && d.startsWith("52") ? d.slice(2) : null;
+  if (local) return `+52 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`;
+  return d.length > 10 ? `+${d}` : d;
 }

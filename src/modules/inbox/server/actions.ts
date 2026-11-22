@@ -27,6 +27,72 @@ const sendSchema = z.object({
   body: z.string().trim().min(1, "El mensaje no puede estar vacío").max(4000),
 });
 
+type LoadedConversation = NonNullable<Awaited<ReturnType<typeof loadConversation>>>;
+
+/**
+ * Persists an outbound human message. A provider failure is stored as `failed`
+ * with Meta's error and reported to the advisor — never shown as delivered.
+ * A successful human reply takes over: the bot switches off (with reason) and
+ * "Atención" clears. Reactivators are a separate switch and stay as they are.
+ */
+async function recordOutbound(
+  ctx: Awaited<ReturnType<typeof getTenantContext>>,
+  conversation: LoadedConversation,
+  input: { body: string; sentVia: "crm" | "template"; result: { ok: boolean; externalId?: string; error?: string } },
+): Promise<void> {
+  const now = new Date();
+  const contact = conversation.contact;
+  const { result } = input;
+  await prisma.$transaction([
+    prisma.message.create({
+      data: {
+        organizationId: ctx.organization.id,
+        conversationId: conversation.id,
+        direction: "outbound",
+        authorType: "member",
+        authorMembershipId: ctx.membership.id,
+        body: input.body,
+        status: result.ok ? "sent" : "failed",
+        externalId: result.externalId,
+        errorMessage: result.ok ? null : (result.error ?? "Error del proveedor"),
+        sentVia: input.sentVia,
+      },
+    }),
+    ...(result.ok
+      ? [
+          prisma.conversation.update({
+            where: { id: conversation.id },
+            data: {
+              lastMessageAt: now,
+              status: conversation.status === "new" || conversation.status === "needs_attention" ? "open" : conversation.status,
+              unreadCount: 0,
+              assignedMembershipId: conversation.assignedMembershipId ?? ctx.membership.id,
+            },
+          }),
+          ...(contact
+            ? [
+                prisma.contact.update({
+                  where: { id: contact.id },
+                  data: {
+                    lastOutboundAt: now,
+                    firstMemberReplyAt: contact.firstMemberReplyAt ?? now,
+                    attentionAt: null,
+                    ...(contact.botEnabled
+                      ? { botEnabled: false, botChangedAt: now, botChangedReason: "human_reply", botChangedByMembershipId: ctx.membership.id }
+                      : {}),
+                  },
+                }),
+              ]
+            : []),
+        ]
+      : []),
+  ]);
+}
+
+function recipientOf(conversation: LoadedConversation): string {
+  return conversation.contact?.whatsapp ?? conversation.contact?.waId ?? conversation.contact?.phone ?? "";
+}
+
 export async function sendMessage(input: unknown): Promise<ActionResult<void>> {
   const ctx = await getTenantContext();
   try {
@@ -54,66 +120,81 @@ export async function sendMessage(input: unknown): Promise<ActionResult<void>> {
             : "Ventana de 24 h cerrada: solo se pueden enviar plantillas aprobadas de Meta.",
         );
       }
+    } else if (contact?.blockedAt) {
+      return fail("Este contacto está bloqueado: no se le pueden enviar mensajes.");
     }
 
     const adapter = getChannelAdapter(conversation.channelAccount.channel);
     const result = await adapter.send({
-      to: conversation.contact?.whatsapp ?? conversation.contact?.phone ?? "",
+      to: recipientOf(conversation),
       body: parsed.data.body,
       conversationExternalId: conversation.externalId,
     });
-
-    await prisma.$transaction([
-      prisma.message.create({
-        data: {
-          organizationId: ctx.organization.id,
-          conversationId: conversation.id,
-          direction: "outbound",
-          authorType: "member",
-          authorMembershipId: ctx.membership.id,
-          body: parsed.data.body,
-          status: result.ok ? "sent" : "failed",
-          externalId: result.externalId,
-        },
-      }),
-      prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-          lastMessageAt: new Date(),
-          status: conversation.status === "new" || conversation.status === "needs_attention" ? "open" : conversation.status,
-          unreadCount: 0,
-          assignedMembershipId: conversation.assignedMembershipId ?? ctx.membership.id,
-        },
-      }),
-      // A human reply takes over: the bot switches off (visible, with reason) and
-      // the "Atención" flag clears. Reactivators are a separate switch and stay as is.
-      ...(contact
-        ? [
-            prisma.contact.update({
-              where: { id: contact.id },
-              data: {
-                lastOutboundAt: new Date(),
-                firstMemberReplyAt: contact.firstMemberReplyAt ?? new Date(),
-                attentionAt: null,
-                ...(contact.botEnabled
-                  ? {
-                      botEnabled: false,
-                      botChangedAt: new Date(),
-                      botChangedReason: "human_reply",
-                      botChangedByMembershipId: ctx.membership.id,
-                    }
-                  : {}),
-              },
-            }),
-          ]
-        : []),
-    ]);
-
+    await recordOutbound(ctx, conversation, { body: parsed.data.body, sentVia: "crm", result });
     revalidatePath("/inbox");
+    if (!result.ok) return fail(`No se entregó: ${result.error ?? "error del proveedor"}`);
     return ok(undefined);
   } catch (error) {
     console.error("sendMessage failed:", error);
     return fail("No se pudo enviar el mensaje.");
+  }
+}
+
+const templateSchema = z.object({
+  conversationId: z.string().uuid(),
+  name: z.string().trim().min(1).max(512),
+  language: z.string().trim().min(2).max(15),
+  params: z.array(z.string().trim().min(1, "Completa todas las variables").max(1024)).max(10),
+});
+
+/** Approved Meta template: the only message allowed outside the 24h window. Blocked contacts still get nothing. */
+export async function sendTemplateMessage(input: unknown): Promise<ActionResult<void>> {
+  const ctx = await getTenantContext();
+  try {
+    requirePermission(ctx, "conversations.reply");
+  } catch {
+    return fail("No tienes permiso para responder conversaciones.");
+  }
+  const parsed = templateSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Plantilla inválida.");
+  if (isDemoMode()) return fail("Modo demo: la plantilla no se envía.");
+
+  try {
+    const conversation = await loadConversation(ctx.organization.id, parsed.data.conversationId);
+    if (!conversation) return fail("Conversación no encontrada.");
+    if (conversation.channelAccount.channel !== "whatsapp") return fail("Las plantillas solo aplican a WhatsApp.");
+    const contact = conversation.contact;
+    if (contact) {
+      const guard = canSendToContact({ blockedAt: contact.blockedAt, lastInboundAt: contact.lastInboundAt, isTemplate: true });
+      if (!guard.allowed) return fail("Este contacto está bloqueado: no se le pueden enviar mensajes.");
+    }
+
+    const { listApprovedTemplates, renderTemplate } = await import("@/modules/leadops/server/templates");
+    const { templates } = await listApprovedTemplates();
+    const template = templates.find((t) => t.name === parsed.data.name && t.language === parsed.data.language);
+    if (!template) return fail("La plantilla no está aprobada en Meta.");
+    if (parsed.data.params.length !== template.params) return fail("Completa todas las variables de la plantilla.");
+
+    const adapter = getChannelAdapter("whatsapp");
+    if (!adapter.sendTemplate) return fail("El canal no admite plantillas.");
+    const result = await adapter.sendTemplate({
+      to: recipientOf(conversation),
+      name: template.name,
+      language: template.language,
+      bodyParams: parsed.data.params,
+    });
+    await recordOutbound(ctx, conversation, {
+      body: `📋 ${renderTemplate(template.body, parsed.data.params)}`,
+      sentVia: "template",
+      result,
+    });
+    await auditLog(ctx, "conversation.template", { type: "conversation", id: conversation.id, metadata: { template: template.name } });
+    revalidatePath("/inbox");
+    if (!result.ok) return fail(`No se entregó: ${result.error ?? "error del proveedor"}`);
+    return ok(undefined);
+  } catch (error) {
+    console.error("sendTemplateMessage failed:", error);
+    return fail("No se pudo enviar la plantilla.");
   }
 }
 
@@ -334,6 +415,29 @@ export async function recommendProperty(input: unknown): Promise<ActionResult<vo
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
     const body = `Te comparto esta propiedad que puede interesarte: ${property.title}. Más información: ${appUrl}/p/${property.slug}`;
 
+    // Same rules as a typed reply: it is really sent through the channel, blocked
+    // contacts get nothing and WhatsApp needs the 24h window.
+    const contact = conversation.contact;
+    if (contact) {
+      const guard = canSendToContact({
+        blockedAt: contact.blockedAt,
+        lastInboundAt: conversation.channelAccount.channel === "whatsapp" ? contact.lastInboundAt : new Date(),
+        isTemplate: false,
+      });
+      if (!guard.allowed) {
+        return fail(guard.reason === "blocked" ? "Este contacto está bloqueado." : "Ventana de 24 h cerrada: usa una plantilla aprobada.");
+      }
+    }
+    const result = await getChannelAdapter(conversation.channelAccount.channel).send({
+      to: recipientOf(conversation),
+      body,
+      conversationExternalId: conversation.externalId,
+    });
+    if (!result.ok) {
+      await recordOutbound(ctx, conversation, { body, sentVia: "crm", result });
+      return fail(`No se entregó: ${result.error ?? "error del proveedor"}`);
+    }
+
     await prisma.$transaction(async (tx) => {
       await tx.message.create({
         data: {
@@ -344,6 +448,8 @@ export async function recommendProperty(input: unknown): Promise<ActionResult<vo
           authorMembershipId: ctx.membership.id,
           body,
           status: "sent",
+          externalId: result.externalId,
+          sentVia: "crm",
         },
       });
       await tx.conversation.update({

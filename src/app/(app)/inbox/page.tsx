@@ -12,6 +12,10 @@ import { ConversationView } from "@/modules/inbox/components/conversation-view";
 import { InboxFilters } from "@/modules/inbox/components/inbox-filters";
 import { getConversation, getInboxData, getInboxOptions } from "@/modules/inbox/server/queries";
 import type { InboxFilters as Filters } from "@/modules/inbox/types";
+import { LeadPanel } from "@/modules/leadops/components/lead-panel";
+import { listApprovedTemplates } from "@/modules/leadops/server/templates";
+
+const LEAD_FILTERS = ["attention", "window_open", "window_closed", "hot"] as const;
 
 export const metadata: Metadata = { title: MODULES.inbox.label };
 
@@ -30,6 +34,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
     channel: pick(params, "channel"),
     status: pick(params, "status"),
     unassigned: pick(params, "unassigned") === "1",
+    lead: LEAD_FILTERS.find((f) => f === pick(params, "lead")),
   };
 
   const [data, options] = await Promise.all([getInboxData(ctx, filters), getInboxOptions(ctx)]);
@@ -38,11 +43,13 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
   // (a single pane), then tapping a chat opens it full-screen with a back button.
   const selectedId = pick(params, "c") ?? null;
   const conversation = selectedId ? await getConversation(ctx, selectedId) : null;
+  const templates = conversation?.lead ? await listApprovedTemplates() : { templates: [], live: false };
 
   const baseParams = new URLSearchParams();
   if (filters.channel) baseParams.set("channel", filters.channel);
   if (filters.status) baseParams.set("status", filters.status);
   if (filters.unassigned) baseParams.set("unassigned", "1");
+  if (filters.lead) baseParams.set("lead", filters.lead);
   const baseQuery = baseParams.toString();
 
   const hasSelection = Boolean(conversation);
@@ -84,6 +91,8 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
                 persist={!isDemoMode() && canReply}
                 canReply={canReply}
                 backHref={`/inbox${baseQuery ? `?${baseQuery}` : ""}`}
+                templates={templates.templates}
+                templatesLive={templates.live}
               />
             </div>
           ) : (
@@ -94,6 +103,13 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
             </div>
           )}
         </div>
+
+        {/* Lead pane (wide screens; a sheet on smaller ones) */}
+        {conversation?.lead ? (
+          <aside className="hidden w-80 shrink-0 border-l border-border xl:block" aria-label="Ficha del lead">
+            <LeadPanel lead={conversation.lead} persist={!isDemoMode() && canReply} />
+          </aside>
+        ) : null}
       </div>
     </div>
   );
