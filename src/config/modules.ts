@@ -7,6 +7,7 @@ import {
   Megaphone,
   LayoutDashboard,
   Settings,
+  Share2,
   Sparkles,
   Users,
   Workflow,
@@ -53,6 +54,15 @@ export const MODULES = {
     icon: Megaphone,
     permission: "contacts.view",
     buildPhase: 26,
+  },
+  social: {
+    key: "social",
+    href: "/social",
+    label: "Redes",
+    description: "Publica en la página de Facebook y en Instagram de la marca y revisa lo publicado.",
+    icon: Share2,
+    permission: "properties.publish",
+    buildPhase: 28,
   },
   contacts: {
     key: "contacts",
