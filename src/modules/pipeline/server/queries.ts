@@ -5,6 +5,7 @@ import type { Prisma } from "@prisma/client";
 import type { TenantContext } from "@/lib/auth/types";
 import { isDemoMode } from "@/lib/db";
 import { prisma } from "@/lib/db/prisma";
+import { ensureDefaultPipeline } from "@/modules/pipeline/server/defaults";
 import { formatCurrency, formatDayMonth } from "@/lib/format";
 import {
   DEMO_OPP_FORM_OPTIONS,
@@ -55,11 +56,8 @@ export async function getPipelineBoard(
   if (isDemoMode()) return demoPipelineBoard(ctx);
   try {
     const organizationId = ctx.organization.id;
-    const pipeline = await prisma.pipeline.findFirst({
-      where: { organizationId, isDefault: true },
-      include: { stages: { orderBy: { position: "asc" } } },
-    });
-    if (!pipeline) return demoPipelineBoard(ctx);
+    // A new organization gets its real default pipeline on first visit (never a demo board).
+    const pipeline = await ensureDefaultPipeline(organizationId);
 
     const where: Prisma.OpportunityWhereInput = { organizationId, pipelineId: pipeline.id, deletedAt: null };
     if (filters.assignedMembershipId) where.assignedMembershipId = filters.assignedMembershipId;
@@ -122,8 +120,8 @@ export async function getPipelineBoard(
       locale,
     };
   } catch (error) {
-    console.error("getPipelineBoard failed, falling back to demo data:", error);
-    return demoPipelineBoard(ctx);
+    console.error("getPipelineBoard failed:", error);
+    throw error;
   }
 }
 
@@ -157,8 +155,8 @@ export async function getPipelineRows(
       closeDateLabel: o.expectedCloseDate ? formatDayMonth(o.expectedCloseDate, locale) : null,
     }));
   } catch (error) {
-    console.error("getPipelineRows failed, falling back to demo data:", error);
-    return demoPipelineRows(ctx);
+    console.error("getPipelineRows failed:", error);
+    throw error;
   }
 }
 
@@ -198,7 +196,7 @@ export async function getOpportunityFormOptions(ctx: TenantContext): Promise<Opp
       defaultCurrency: ctx.organization.defaultCurrency,
     };
   } catch (error) {
-    console.error("getOpportunityFormOptions failed, falling back to demo data:", error);
-    return DEMO_OPP_FORM_OPTIONS;
+    console.error("getOpportunityFormOptions failed:", error);
+    throw error;
   }
 }

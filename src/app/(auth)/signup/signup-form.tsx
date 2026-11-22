@@ -18,8 +18,8 @@ export function SignUpForm() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="items-center space-y-2 text-center">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
-          <Building2 className="size-5 text-primary" />
+        <div className="flex size-10 items-center justify-center rounded-xl bg-gold/15">
+          <Building2 className="size-5 text-gold" />
         </div>
         <CardTitle>Crea tu organización</CardTitle>
         <CardDescription>Empieza gratis. Podrás invitar a tu equipo después.</CardDescription>

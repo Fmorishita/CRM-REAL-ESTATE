@@ -28,6 +28,10 @@ const SOURCE_LABELS: Record<string, string> = {
 const ORIGIN_LABELS: Record<string, string> = {
   ctwa_ad: "Anuncio de WhatsApp",
   organic_whatsapp: "WhatsApp orgánico",
+  messenger_ad: "Anuncio Messenger",
+  instagram_ad: "Anuncio Instagram",
+  organic_messenger: "Messenger orgánico",
+  organic_instagram: "Instagram orgánico",
   web_form: "Formulario web",
   import: "Importación",
   manual: "Manual",
@@ -36,6 +40,7 @@ const ORIGIN_LABELS: Record<string, string> = {
 const BOT_REASON_LABELS: Record<string, string> = {
   human_reply: "respondió un asesor",
   human_reply_phone: "respondió desde el teléfono",
+  human_reply_meta: "respondió desde Meta Business Suite",
   manual: "apagada a mano",
 };
 
@@ -80,7 +85,7 @@ export function LeadPanel({ lead, persist }: { lead: LeadState; persist: boolean
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>, success?: string) {
     if (!persist) {
-      toast.info("Modo demo: los cambios no se guardan.");
+      toast.info("Esta vista es de solo lectura.");
       return;
     }
     startTransition(async () => {
@@ -114,7 +119,7 @@ export function LeadPanel({ lead, persist }: { lead: LeadState; persist: boolean
   const [reading, setReading] = React.useState(false);
   async function readChat() {
     if (!persist) {
-      toast.info("Modo demo: conecta la base de datos para leer chats con IA.");
+      toast.info("Esta vista es de solo lectura.");
       return;
     }
     setReading(true);

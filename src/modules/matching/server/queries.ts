@@ -83,8 +83,8 @@ export async function getPropertyMatches(ctx: TenantContext, contactId: string):
 
     return matches.sort((a, b) => b.score - a.score).slice(0, 6);
   } catch (error) {
-    console.error("getPropertyMatches failed, falling back to demo:", error);
-    return demoPropertyMatches(ctx, contactId);
+    console.error("getPropertyMatches failed:", error);
+    throw error;
   }
 }
 
@@ -148,7 +148,7 @@ export async function getClientMatches(ctx: TenantContext, propertyId: string): 
 
     return matches.filter((m) => m.score >= 40).sort((a, b) => b.score - a.score).slice(0, 6);
   } catch (error) {
-    console.error("getClientMatches failed, falling back to demo:", error);
-    return demoClientMatches(ctx, propertyId);
+    console.error("getClientMatches failed:", error);
+    throw error;
   }
 }

@@ -104,7 +104,7 @@ export async function getAnalytics(ctx: TenantContext): Promise<AnalyticsData> {
       automations: { active: activeAutomations, runs: totalRuns },
     };
   } catch (error) {
-    console.error("getAnalytics failed, falling back to demo:", error);
-    return demoAnalytics(ctx);
+    console.error("getAnalytics failed:", error);
+    throw error;
   }
 }

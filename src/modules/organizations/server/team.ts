@@ -22,7 +22,7 @@ export async function listTeam(organizationId: string): Promise<DemoTeamMember[]
       status: m.status,
     }));
   } catch (error) {
-    console.error("listTeam failed, falling back to demo data:", error);
-    return DEMO_TEAM;
+    console.error("listTeam failed:", error);
+    throw error;
   }
 }

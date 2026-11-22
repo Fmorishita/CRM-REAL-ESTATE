@@ -6,5 +6,8 @@
       "path": "/api/cron/meta-insights",
       "schedule": "15 7 * * *"
     }
+  ],
+  "regions": [
+    "pdx1"
   ]
 }

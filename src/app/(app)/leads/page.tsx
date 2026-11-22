@@ -19,6 +19,10 @@ export const metadata: Metadata = { title: MODULES.leads.label };
 const ORIGIN_LABELS: Record<string, string> = {
   ctwa_ad: "Anuncio WhatsApp",
   organic_whatsapp: "WhatsApp orgánico",
+  messenger_ad: "Anuncio Messenger",
+  instagram_ad: "Anuncio Instagram",
+  organic_messenger: "Messenger orgánico",
+  organic_instagram: "Instagram orgánico",
   web_form: "Formulario web",
   import: "Importación",
   manual: "Manual",

@@ -60,8 +60,8 @@ export function ResetPasswordForm() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="items-center space-y-2 text-center">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
-          <KeyRound className="size-5 text-primary" />
+        <div className="flex size-10 items-center justify-center rounded-xl bg-gold/15">
+          <KeyRound className="size-5 text-gold" />
         </div>
         <CardTitle>Nueva contraseña</CardTitle>
         <CardDescription>

@@ -16,7 +16,7 @@ export function AiInsightsCard({ insights }: { insights: AiInsight[] }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="size-4 text-violet-500" />
-          AI Insights
+          Sugerencias de la IA
         </CardTitle>
         <CardDescription>Hallazgos sobre tus leads, conversaciones y pipeline.</CardDescription>
       </CardHeader>

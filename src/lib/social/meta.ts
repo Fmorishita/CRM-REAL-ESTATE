@@ -124,3 +124,27 @@ export async function publishToInstagram(input: { caption: string; imageUrl: str
   const published = await graph<{ id: string }>(`/${cfg.igUserId}/media_publish`, { method: "POST", params: { creation_id: container.id } });
   return published.id;
 }
+
+/**
+ * Best-effort public profile of a Messenger (PSID) or Instagram (IGSID) user,
+ * used to name new contacts. Returns null without a token or on any error.
+ */
+export async function fetchSocialProfile(
+  network: "facebook" | "instagram",
+  userId: string,
+): Promise<{ firstName: string; lastName: string; username: string | null } | null> {
+  if (!process.env.META_PAGE_ACCESS_TOKEN?.trim()) return null;
+  try {
+    if (network === "facebook") {
+      const p = await graph<{ first_name?: string; last_name?: string }>(`/${userId}`, { params: { fields: "first_name,last_name" } });
+      if (!p.first_name && !p.last_name) return null;
+      return { firstName: p.first_name ?? "", lastName: p.last_name ?? "", username: null };
+    }
+    const p = await graph<{ name?: string; username?: string }>(`/${userId}`, { params: { fields: "name,username" } });
+    const [first, ...rest] = (p.name ?? "").split(/\s+/).filter(Boolean);
+    if (!first && !p.username) return null;
+    return { firstName: first ?? `@${p.username}`, lastName: rest.join(" "), username: p.username ?? null };
+  } catch {
+    return null;
+  }
+}

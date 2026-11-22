@@ -95,7 +95,7 @@ export async function listProperties(
     ]);
     return { items: rows.map((p) => toListItem(p, currency, locale)), total };
   } catch (error) {
-    console.error("listProperties failed, falling back to demo data:", error);
+    console.error("listProperties failed:", error);
     const items = applyDemoFilters(demoPropertyList(ctx), filters);
     return { items, total: items.length };
   }
@@ -159,8 +159,8 @@ export async function getProperty(ctx: TenantContext, idOrSlug: string): Promise
       })),
     };
   } catch (error) {
-    console.error("getProperty failed, falling back to demo data:", error);
-    return demoPropertyDetail(ctx, idOrSlug);
+    console.error("getProperty failed:", error);
+    throw error;
   }
 }
 
@@ -174,7 +174,7 @@ export async function getPropertyFormOptions(ctx: TenantContext): Promise<Proper
     });
     return { members: members.map((m) => ({ id: m.id, name: m.user.name })) };
   } catch (error) {
-    console.error("getPropertyFormOptions failed, falling back to demo data:", error);
-    return DEMO_PROPERTY_FORM_OPTIONS;
+    console.error("getPropertyFormOptions failed:", error);
+    throw error;
   }
 }

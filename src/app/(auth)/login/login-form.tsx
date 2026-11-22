@@ -37,11 +37,11 @@ export function LoginForm({
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="items-center space-y-2 text-center">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
-          <Building2 className="size-5 text-primary" />
+        <div className="flex size-10 items-center justify-center rounded-xl bg-gold/15">
+          <Building2 className="size-5 text-gold" />
         </div>
-        <CardTitle>Realtor Pro CRM</CardTitle>
-        <CardDescription>Inicia sesión para entrar a tu organización.</CardDescription>
+        <CardTitle>Iniciar sesión</CardTitle>
+        <CardDescription>Entra con tu correo y contraseña.</CardDescription>
       </CardHeader>
       <CardContent>
         {initialNotice ? (
@@ -80,11 +80,8 @@ export function LoginForm({
         </form>
       </CardContent>
       <CardFooter className="justify-center">
-        <p className="text-sm text-muted-foreground">
-          ¿No tienes cuenta?{" "}
-          <Link href="/signup" className="font-medium text-primary hover:underline">
-            Crea tu organización
-          </Link>
+        <p className="text-center text-xs text-muted-foreground">
+          ¿Eres asesor y no tienes acceso? Pide a tu administrador que te invite.
         </p>
       </CardFooter>
     </Card>

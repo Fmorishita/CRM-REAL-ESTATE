@@ -15,12 +15,14 @@ import { PipelineOverviewCard } from "@/modules/dashboard/components/pipeline-ov
 import { PropertyPerformanceCard } from "@/modules/dashboard/components/property-performance-card";
 import { UpcomingVisitsCard } from "@/modules/dashboard/components/upcoming-visits-card";
 import { getDashboardData } from "@/modules/dashboard/server/queries";
+import { LeadPulseCard } from "@/modules/leadops/components/lead-pulse";
+import { getLeadPulse } from "@/modules/leadops/server/pulse";
 
 export const metadata: Metadata = { title: MODULES.dashboard.label };
 
 export default async function DashboardPage() {
   const ctx = await getTenantContext();
-  const data = await getDashboardData(ctx);
+  const [data, pulse] = await Promise.all([getDashboardData(ctx), getLeadPulse(ctx)]);
   const { defaultLocale: locale, timezone } = ctx.organization;
 
   const today = new Intl.DateTimeFormat(locale, {
@@ -39,6 +41,8 @@ export default async function DashboardPage() {
         description={`${today} · ${ctx.organization.name}`}
         actions={isDemoMode() ? <Badge variant="secondary">Datos demo</Badge> : null}
       />
+
+      <LeadPulseCard pulse={pulse} />
 
       <OnboardingChecklist />
 

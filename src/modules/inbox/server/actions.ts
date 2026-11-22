@@ -89,8 +89,16 @@ async function recordOutbound(
   ]);
 }
 
+/** WhatsApp sends to the phone id; Messenger/Instagram to the page-scoped sender id of the thread. */
 function recipientOf(conversation: LoadedConversation): string {
+  const channel = conversation.channelAccount.channel;
+  if (channel === "instagram" || channel === "facebook") return conversation.externalId ?? "";
   return conversation.contact?.whatsapp ?? conversation.contact?.waId ?? conversation.contact?.phone ?? "";
+}
+
+/** Meta's 24h messaging window applies to WhatsApp, Messenger and Instagram Direct. */
+function isMetaChannel(channel: string): boolean {
+  return channel === "whatsapp" || channel === "instagram" || channel === "facebook";
 }
 
 export async function sendMessage(input: unknown): Promise<ActionResult<void>> {
@@ -111,13 +119,16 @@ export async function sendMessage(input: unknown): Promise<ActionResult<void>> {
     // Lead-ops rules, enforced server-side: blocked contacts get nothing, and
     // free-form WhatsApp text needs the 24h window (from the customer's last message).
     const contact = conversation.contact;
-    if (contact && conversation.channelAccount.channel === "whatsapp") {
+    const channel = conversation.channelAccount.channel;
+    if (contact && isMetaChannel(channel)) {
       const guard = canSendToContact({ blockedAt: contact.blockedAt, lastInboundAt: contact.lastInboundAt, isTemplate: false });
       if (!guard.allowed) {
         return fail(
           guard.reason === "blocked"
             ? "Este contacto está bloqueado: no se le pueden enviar mensajes."
-            : "Ventana de 24 h cerrada: solo se pueden enviar plantillas aprobadas de Meta.",
+            : channel === "whatsapp"
+              ? "Ventana de 24 h cerrada: solo se pueden enviar plantillas aprobadas de Meta."
+              : "Ventana de 24 h cerrada: Meta solo permite responder dentro de 24 h desde el último mensaje del cliente.",
         );
       }
     } else if (contact?.blockedAt) {
@@ -421,7 +432,7 @@ export async function recommendProperty(input: unknown): Promise<ActionResult<vo
     if (contact) {
       const guard = canSendToContact({
         blockedAt: contact.blockedAt,
-        lastInboundAt: conversation.channelAccount.channel === "whatsapp" ? contact.lastInboundAt : new Date(),
+        lastInboundAt: isMetaChannel(conversation.channelAccount.channel) ? contact.lastInboundAt : new Date(),
         isTemplate: false,
       });
       if (!guard.allowed) {

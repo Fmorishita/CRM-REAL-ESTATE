@@ -49,7 +49,7 @@ export async function getContactIntelligence(ctx: TenantContext, contactId: stri
 
     return computeIntelligence(signals);
   } catch (error) {
-    console.error("getContactIntelligence failed, falling back to demo:", error);
-    return demoIntelligence(contactId);
+    console.error("getContactIntelligence failed:", error);
+    throw error;
   }
 }

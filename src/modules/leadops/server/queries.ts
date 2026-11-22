@@ -13,6 +13,9 @@ import {
 import { highestFact, isServiceWindowOpen } from "@/lib/leadops/rules";
 import { buildDemoLeadOps } from "@/modules/leadops/demo";
 
+/** Origins that come from a paid ad (click-to-WhatsApp / Messenger / Instagram). */
+const AD_ORIGINS = new Set(["ctwa_ad", "messenger_ad", "instagram_ad"]);
+
 export interface LeadRow {
   id: string;
   name: string;
@@ -126,7 +129,7 @@ export function aggregateLeadOps(
     spend: null, currency, costPerLead: null, costPerQualified: null, avgFacts: 0,
   });
   for (const l of leads) {
-    if (l.origin !== "ctwa_ad") continue;
+    if (!AD_ORIGINS.has(l.origin)) continue;
     const key = l.adId ?? `sin-id:${l.adName ?? "anuncio"}`;
     const row = byAd.get(key) ?? empty(key, l.adName ?? key);
     row.leads += 1;
@@ -163,7 +166,7 @@ export function aggregateLeadOps(
     capi,
     totals: {
       leads: leads.length,
-      fromAds: leads.filter((l) => l.origin === "ctwa_ad").length,
+      fromAds: leads.filter((l) => AD_ORIGINS.has(l.origin)).length,
       qualified: leads.filter((l) => l.qualified).length,
       hot: leads.filter((l) => l.temperature === "hot").length,
       windowOpen: leads.filter((l) => l.windowOpen).length,
@@ -188,7 +191,7 @@ export async function getLeadOpsData(ctx: TenantContext, opts: { since?: Date } 
       organizationId,
       deletedAt: null,
       createdAt: { gte: since },
-      OR: [{ waId: { not: null } }, { attributions: { some: { channel: "web_form" } } }],
+      OR: [{ waId: { not: null } }, { attributions: { some: {} } }],
     },
     include: {
       facts: { select: { key: true, value: true } },

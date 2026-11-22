@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db/prisma";
+import { ensureDefaultPipeline } from "@/modules/pipeline/server/defaults";
 
 function slugify(input: string): string {
   return (
@@ -65,5 +66,8 @@ export async function provisionOrganization(input: ProvisionInput): Promise<Prov
     });
 
     return { organizationId: org.id, userId: user.id };
+  }).then(async (result) => {
+    await ensureDefaultPipeline(result.organizationId);
+    return result;
   });
 }

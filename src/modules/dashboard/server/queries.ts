@@ -24,8 +24,8 @@ export async function getDashboardData(ctx: TenantContext): Promise<DashboardDat
   try {
     return await queryDashboard(ctx);
   } catch (error) {
-    console.error("getDashboardData failed, falling back to demo data:", error);
-    return demoDashboardData(ctx);
+    console.error("getDashboardData failed:", error);
+    throw error;
   }
 }
 

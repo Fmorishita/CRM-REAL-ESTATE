@@ -40,8 +40,8 @@ export async function getPortalData(session: PortalSession): Promise<PortalData>
   } else {
     try {
       const row = await prisma.organization.findUnique({ where: { id: session.organizationId } });
-      org = row
-        ? {
+      if (!row) throw new Error("Organización del portal no encontrada.");
+      org = {
             id: row.id,
             name: row.name,
             slug: row.slug,
@@ -50,10 +50,10 @@ export async function getPortalData(session: PortalSession): Promise<PortalData>
             defaultCurrency: row.defaultCurrency,
             defaultLocale: row.defaultLocale,
             timezone: row.timezone,
-          }
-        : DEMO_ORGANIZATIONS[0]!;
-    } catch {
-      org = DEMO_ORGANIZATIONS[0]!;
+          };
+    } catch (error) {
+      console.error("getPortalData: organization lookup failed", error);
+      throw error;
     }
   }
 

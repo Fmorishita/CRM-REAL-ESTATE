@@ -375,8 +375,11 @@ export function ConversationView({
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs">
               <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
                 <Clock className="size-3.5 shrink-0" />
-                Ventana de 24 h cerrada: solo puedes enviar una plantilla aprobada.
+                {conversation.channel === "whatsapp"
+                  ? "Ventana de 24 h cerrada: solo puedes enviar una plantilla aprobada."
+                  : "Ventana de 24 h cerrada: Meta no permite escribir hasta que el cliente vuelva a mandar mensaje."}
               </span>
+              {conversation.channel === "whatsapp" ? (
               <TemplatePicker
                 conversationId={conversation.id}
                 contactFirstName={firstName}
@@ -386,6 +389,7 @@ export function ConversationView({
                 variant="default"
                 label="Enviar plantilla"
               />
+              ) : null}
             </div>
           ) : null}
           <div className="mb-2 flex flex-wrap items-center gap-1">
@@ -393,7 +397,7 @@ export function ConversationView({
               {suggesting ? <Loader2 className="animate-spin" /> : <Wand2 />}
               Sugerir con IA
             </Button>
-            {lead && !windowClosed ? (
+            {lead && !windowClosed && conversation.channel === "whatsapp" ? (
               <TemplatePicker
                 conversationId={conversation.id}
                 contactFirstName={firstName}
@@ -485,6 +489,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             </span>
           ) : null}
           {message.sentVia === "template" ? <span>Plantilla ·</span> : null}
+          {message.sentVia === "meta_inbox" ? <span title="Respondido desde Meta Business Suite">Meta ·</span> : null}
           {message.authorName ? `${message.authorName} · ` : ""}
           {message.timeLabel}
           {outbound && !failed ? <StatusIcon status={message.status} /> : null}
