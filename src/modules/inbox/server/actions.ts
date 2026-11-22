@@ -9,6 +9,7 @@ import { isDemoMode } from "@/lib/db";
 import { prisma } from "@/lib/db/prisma";
 import { getChannelAdapter } from "@/lib/integrations/channels";
 import { suggestReply } from "@/lib/ai/runners";
+import { canSendToContact } from "@/lib/leadops/rules";
 import { fail, ok, type ActionResult } from "@/lib/result";
 import { demoConversationDetail } from "@/modules/inbox/demo";
 
@@ -41,6 +42,20 @@ export async function sendMessage(input: unknown): Promise<ActionResult<void>> {
     const conversation = await loadConversation(ctx.organization.id, parsed.data.conversationId);
     if (!conversation) return fail("Conversación no encontrada.");
 
+    // Lead-ops rules, enforced server-side: blocked contacts get nothing, and
+    // free-form WhatsApp text needs the 24h window (from the customer's last message).
+    const contact = conversation.contact;
+    if (contact && conversation.channelAccount.channel === "whatsapp") {
+      const guard = canSendToContact({ blockedAt: contact.blockedAt, lastInboundAt: contact.lastInboundAt, isTemplate: false });
+      if (!guard.allowed) {
+        return fail(
+          guard.reason === "blocked"
+            ? "Este contacto está bloqueado: no se le pueden enviar mensajes."
+            : "Ventana de 24 h cerrada: solo se pueden enviar plantillas aprobadas de Meta.",
+        );
+      }
+    }
+
     const adapter = getChannelAdapter(conversation.channelAccount.channel);
     const result = await adapter.send({
       to: conversation.contact?.whatsapp ?? conversation.contact?.phone ?? "",
@@ -70,6 +85,28 @@ export async function sendMessage(input: unknown): Promise<ActionResult<void>> {
           assignedMembershipId: conversation.assignedMembershipId ?? ctx.membership.id,
         },
       }),
+      // A human reply takes over: the bot switches off (visible, with reason) and
+      // the "Atención" flag clears. Reactivators are a separate switch and stay as is.
+      ...(contact
+        ? [
+            prisma.contact.update({
+              where: { id: contact.id },
+              data: {
+                lastOutboundAt: new Date(),
+                firstMemberReplyAt: contact.firstMemberReplyAt ?? new Date(),
+                attentionAt: null,
+                ...(contact.botEnabled
+                  ? {
+                      botEnabled: false,
+                      botChangedAt: new Date(),
+                      botChangedReason: "human_reply",
+                      botChangedByMembershipId: ctx.membership.id,
+                    }
+                  : {}),
+              },
+            }),
+          ]
+        : []),
     ]);
 
     revalidatePath("/inbox");
