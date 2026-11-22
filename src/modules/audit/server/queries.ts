@@ -53,7 +53,7 @@ export async function listAuditLogs(ctx: TenantContext): Promise<AuditLogView[]>
       atLabel: formatRelativeTime(r.createdAt, ctx.organization.defaultLocale),
     }));
   } catch (error) {
-    console.error("listAuditLogs failed, falling back to demo:", error);
-    return DEMO_AUDIT;
+    console.error("listAuditLogs failed:", error);
+    throw error;
   }
 }

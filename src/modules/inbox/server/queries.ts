@@ -54,7 +54,7 @@ function toListItem(
     lastMessageLabel: c.lastMessageAt ? formatRelativeTime(c.lastMessageAt, locale) : null,
     unreadCount: c.unreadCount,
     assignedName: c.assignedMembership?.user.name ?? null,
-    ...(c.contact?.waId
+    ...(c.contact && ["whatsapp", "instagram", "facebook"].includes(c.channelAccount.channel)
       ? {
           attention: Boolean(c.contact.attentionAt),
           windowOpen: isServiceWindowOpen(c.contact.lastInboundAt),
@@ -112,8 +112,8 @@ export async function getInboxData(ctx: TenantContext, filters: InboxFilters = {
       counts: { all, unassigned, needsAttention },
     };
   } catch (error) {
-    console.error("getInboxData failed, falling back to demo data:", error);
-    return demoInboxData(filters);
+    console.error("getInboxData failed:", error);
+    throw error;
   }
 }
 
@@ -172,7 +172,7 @@ export async function getConversation(ctx: TenantContext, id: string): Promise<C
 
     const ct = c.contact;
     const lead: LeadState | null =
-      ct && (ct.waId || c.channelAccount.channel === "whatsapp")
+      ct && (ct.waId || ["whatsapp", "instagram", "facebook"].includes(c.channelAccount.channel))
         ? {
             contactId: ct.id,
             botEnabled: ct.botEnabled,
@@ -220,8 +220,8 @@ export async function getConversation(ctx: TenantContext, id: string): Promise<C
       lead,
     };
   } catch (error) {
-    console.error("getConversation failed, falling back to demo data:", error);
-    return demoConversationDetail(id);
+    console.error("getConversation failed:", error);
+    throw error;
   }
 }
 
@@ -257,8 +257,8 @@ export async function getInboxOptions(ctx: TenantContext): Promise<InboxOptions>
       })),
     };
   } catch (error) {
-    console.error("getInboxOptions failed, falling back to demo data:", error);
-    return DEMO_INBOX_OPTIONS;
+    console.error("getInboxOptions failed:", error);
+    throw error;
   }
 }
 

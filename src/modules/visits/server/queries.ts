@@ -67,8 +67,8 @@ export async function listVisits(ctx: TenantContext, filters: VisitFilters = {})
     const rows = await prisma.visit.findMany({ where, include, orderBy: { scheduledAt: "asc" } });
     return rows.map((v) => toView(ctx, v));
   } catch (error) {
-    console.error("listVisits failed, falling back to demo:", error);
-    return demoVisits(ctx, filters);
+    console.error("listVisits failed:", error);
+    throw error;
   }
 }
 
@@ -97,7 +97,7 @@ export async function getVisitFormOptions(ctx: TenantContext): Promise<VisitForm
       members: members.map((m) => ({ id: m.id, name: m.user.name })),
     };
   } catch (error) {
-    console.error("getVisitFormOptions failed, falling back to demo:", error);
-    return DEMO_VISIT_FORM_OPTIONS;
+    console.error("getVisitFormOptions failed:", error);
+    throw error;
   }
 }

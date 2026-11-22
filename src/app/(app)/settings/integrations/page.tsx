@@ -57,7 +57,7 @@ export default async function IntegrationsPage() {
 
       <PageHeader
         title="Integraciones"
-        description="Conecta WhatsApp, Meta, correo, calendario, mapas y webhooks. Cada integración funciona en modo demo hasta que agregues sus credenciales."
+        description="Conecta WhatsApp, Meta, correo, calendario, mapas y webhooks. Cada integración se activa cuando se cargan sus credenciales en el servidor."
         actions={
           <Badge variant="secondary">
             {connected} de {total} conectadas
@@ -68,11 +68,10 @@ export default async function IntegrationsPage() {
       <div className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 p-4 text-sm">
         <Plug className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <div>
-          <p className="font-medium text-foreground">Arquitectura por adaptadores</p>
+          <p className="font-medium text-foreground">Cómo se conectan</p>
           <p className="text-muted-foreground">
-            Cada canal implementa una interfaz estable con un adaptador mock que ya funciona. El adaptador real se
-            activa solo cuando configuras sus variables de entorno; nunca inventamos credenciales. Consulta{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">docs/08-integrations.md</code> para los pasos.
+            Las credenciales se guardan cifradas en Vercel (Settings → Environment Variables) y nunca en la base de
+            datos ni en el navegador. En cuanto se cargan, el canal pasa a «Conectado» sin tocar código.
           </p>
         </div>
       </div>
@@ -101,8 +100,8 @@ export default async function IntegrationsPage() {
                           Conectado
                         </Badge>
                       ) : (
-                        <Badge variant="secondary" className="shrink-0">
-                          Modo demo
+                        <Badge variant="outline" className="shrink-0 text-amber-600 dark:text-amber-400">
+                          Sin conectar
                         </Badge>
                       )}
                     </div>

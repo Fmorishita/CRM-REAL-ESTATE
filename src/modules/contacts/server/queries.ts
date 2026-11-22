@@ -101,7 +101,7 @@ export async function listContacts(ctx: TenantContext, filters: ContactFilters =
     ]);
     return { items: rows.map((c) => toListItem(c, currency, locale)), total };
   } catch (error) {
-    console.error("listContacts failed, falling back to demo data:", error);
+    console.error("listContacts failed:", error);
     const items = applyDemoFilters(demoContactList(ctx), filters);
     return { items, total: items.length };
   }
@@ -230,8 +230,8 @@ export async function getContact(ctx: TenantContext, id: string): Promise<Contac
       openOpportunities: c.opportunities.filter((o) => o.closedAt == null).length,
     };
   } catch (error) {
-    console.error("getContact failed, falling back to demo data:", error);
-    return demoContactDetail(ctx, id);
+    console.error("getContact failed:", error);
+    throw error;
   }
 }
 
@@ -253,7 +253,7 @@ export async function getContactFormOptions(ctx: TenantContext): Promise<Contact
       tags: tags.map((t) => ({ id: t.id, name: t.name, color: t.color })),
     };
   } catch (error) {
-    console.error("getContactFormOptions failed, falling back to demo data:", error);
-    return DEMO_FORM_OPTIONS;
+    console.error("getContactFormOptions failed:", error);
+    throw error;
   }
 }

@@ -137,8 +137,8 @@ export async function getPublicProperty(slug: string): Promise<PublicProperty | 
       similar: similar.map((p) => toCard(p, locale)),
     };
   } catch (error) {
-    console.error("getPublicProperty failed, falling back to demo data:", error);
-    return demoPublicProperty(slug);
+    console.error("getPublicProperty failed:", error);
+    throw error;
   }
 }
 
@@ -178,7 +178,7 @@ export async function getPublicCompany(slug: string): Promise<PublicCompany | nu
       seoDescription: settings.description ?? `Descubre las propiedades de ${org.name}.`,
     };
   } catch (error) {
-    console.error("getPublicCompany failed, falling back to demo data:", error);
-    return demoPublicCompany(slug);
+    console.error("getPublicCompany failed:", error);
+    throw error;
   }
 }

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import type { Permission } from "@/config/permissions";
@@ -25,7 +26,7 @@ import { resolveTenantForEmail, resolveTenantFromDb } from "@/modules/organizati
  *
  * Tenancy is never derived from client input.
  */
-export async function getRealTenantContext(): Promise<TenantContext> {
+export const getRealTenantContext = cache(async function getRealTenantContext(): Promise<TenantContext> {
   if (isAuthEnabled()) {
     const authUser = await getAuthUser();
     if (!authUser) redirect("/login");
@@ -50,16 +51,17 @@ export async function getRealTenantContext(): Promise<TenantContext> {
     console.error("Tenant resolution failed, falling back to demo data:", error);
     return demoTenantContext();
   }
-}
+});
 
 /**
  * The context used to render and gate the app. Same as the real context, plus a
  * read-only "ver como" role preview when the user has one active.
  */
-export async function getTenantContext(): Promise<TenantContext> {
+/** Memoized per request: the layout, page and nested server components share one lookup. */
+export const getTenantContext = cache(async function getTenantContext(): Promise<TenantContext> {
   const real = await getRealTenantContext();
   return applyViewAs(real, await readViewAsRole());
-}
+});
 
 export function hasPermission(ctx: TenantContext, permission: Permission): boolean {
   return ctx.permissions.includes(permission);

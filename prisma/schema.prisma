@@ -752,6 +752,7 @@ model Conversation {
 
   @@index([organizationId, status, lastMessageAt])
   @@index([organizationId, assignedMembershipId])
+  @@index([channelAccountId, externalId])
   @@map("conversations")
 }
 
@@ -1125,6 +1126,11 @@ enum AttributionChannel {
   web_form
   import
   manual
+  /// Click-to-Messenger / click-to-Instagram-Direct ads (referral with ad_id).
+  messenger_ad
+  instagram_ad
+  organic_messenger
+  organic_instagram
 }
 
 /// Where a lead came from. For click-to-WhatsApp the referral object of the

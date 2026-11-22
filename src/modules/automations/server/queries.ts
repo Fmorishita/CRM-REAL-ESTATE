@@ -58,8 +58,8 @@ export async function listAutomations(ctx: TenantContext): Promise<AutomationVie
     });
     return rows.map((r) => toView(r, ctx.organization.defaultLocale));
   } catch (error) {
-    console.error("listAutomations failed, falling back to demo:", error);
-    return demoAutomations();
+    console.error("listAutomations failed:", error);
+    throw error;
   }
 }
 
@@ -73,8 +73,8 @@ export async function getAutomation(ctx: TenantContext, id: string): Promise<Aut
     if (!a) return null;
     return toView(a, ctx.organization.defaultLocale);
   } catch (error) {
-    console.error("getAutomation failed, falling back to demo:", error);
-    return demoAutomation(id);
+    console.error("getAutomation failed:", error);
+    throw error;
   }
 }
 
@@ -98,7 +98,7 @@ export async function listAutomationRuns(ctx: TenantContext, automationId: strin
       error: r.error,
     }));
   } catch (error) {
-    console.error("listAutomationRuns failed, falling back to demo:", error);
-    return demoAutomationRuns(automationId);
+    console.error("listAutomationRuns failed:", error);
+    throw error;
   }
 }
