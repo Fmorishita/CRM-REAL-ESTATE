@@ -22,7 +22,25 @@ if (!process.env.DATABASE_URL || !process.env.DIRECT_URL) {
   process.exit(0);
 }
 
-const run = (cmd) => execSync(cmd, { stdio: "pipe", encoding: "utf8" });
+/**
+ * Supabase's direct host (db.<ref>.supabase.co) is IPv6-only and build machines
+ * are IPv4. Migrations then go through the Supavisor *session* pooler (port
+ * 5432 on the same pooler host as DATABASE_URL), which supports DDL.
+ */
+function migrationUrl() {
+  const direct = new URL(process.env.DIRECT_URL);
+  if (!/^db\.[a-z0-9]+\.supabase\.co$/.test(direct.hostname)) return process.env.DIRECT_URL;
+  const pooled = new URL(process.env.DATABASE_URL);
+  if (!pooled.hostname.endsWith(".pooler.supabase.com")) return process.env.DIRECT_URL;
+  pooled.port = "5432";
+  pooled.search = "";
+  console.log("[migrate] using the Supabase session pooler (IPv4) for migrations");
+  return pooled.toString();
+}
+
+const DIRECT = migrationUrl();
+const run = (cmd) =>
+  execSync(cmd, { stdio: "pipe", encoding: "utf8", env: { ...process.env, DIRECT_URL: DIRECT, DATABASE_URL: DIRECT } });
 
 function deploy() {
   const out = run("pnpm exec prisma migrate deploy");
@@ -40,7 +58,7 @@ try {
   }
   console.log("[migrate] database has no migration history (P3005); checking for the init schema…");
   const { PrismaClient } = await import("@prisma/client");
-  const prisma = new PrismaClient({ datasourceUrl: process.env.DIRECT_URL });
+  const prisma = new PrismaClient({ datasourceUrl: DIRECT });
   const rows = await prisma.$queryRaw`SELECT to_regclass('public.organizations') IS NOT NULL AS present`;
   await prisma.$disconnect();
   if (!rows?.[0]?.present) {
