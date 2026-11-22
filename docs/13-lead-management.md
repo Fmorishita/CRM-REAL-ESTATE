@@ -125,3 +125,11 @@ El sitio guarda cada lead en la tabla `leads` de su propio proyecto Supabase. Pa
 - Un eco **no abre ni extiende** la ventana de 24 h (solo el mensaje del cliente la abre).
 - Campos del webhook a suscribir: `messages` y `smb_message_echoes` (los de sincronización de historial/contactos no se usan todavía).
 - Requisitos de Meta a confirmar al activar: la incorporación de un número de la app se hace con el flujo de *Embedded Signup* para usuarios de WhatsApp Business app (app de Meta como Tech Provider, o mediante un BSP); el número debe estar activo en la app; algunas funciones de la app (p. ej. listas de difusión) dejan de estar disponibles; hay que abrir la app en el teléfono periódicamente para mantener el enlace. Verificar disponibilidad para México en la cuenta antes de mover nada.
+
+## 12. Producción (22-nov-2026)
+
+- **URL**: https://legacycapitalmx.com/realtorpro (el proyecto `legacy-capital` reescribe `/realtorpro/*` hacia el proyecto `realtorpro`, que se construye con `NEXT_PUBLIC_BASE_PATH=/realtorpro`). También responde en https://realtorpro.vercel.app/realtorpro.
+- **Migraciones**: se aplican solas en cada build de producción (`scripts/vercel-migrate.mjs`, vía pooler de sesión de Supabase). Si una falla, el build se detiene y sigue sirviendo la versión anterior.
+- **Acceso**: inicio de sesión con Supabase Auth; "¿Olvidaste tu contraseña?" envía el enlace para crear una nueva.
+- **Formulario web**: trigger `crm_lead_webhook` en `public.leads` del proyecto Supabase del sitio (pg_net + secreto en Vault `crm_web_leads_secret`) → `https://realtorpro.vercel.app/realtorpro/api/leads/web`.
+- **Webhook de WhatsApp para Meta**: `https://legacycapitalmx.com/realtorpro/api/webhooks/whatsapp` (token de verificación en la variable `WHATSAPP_WEBHOOK_VERIFY_TOKEN` de Vercel).
