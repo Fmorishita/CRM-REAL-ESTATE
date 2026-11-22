@@ -18,6 +18,7 @@ export const AI_TASK_KEYS = [
   "recommend_properties",
   "generate_property_description",
   "next_best_action",
+  "extract_lead_facts",
 ] as const;
 
 export type AiTaskKey = (typeof AI_TASK_KEYS)[number];

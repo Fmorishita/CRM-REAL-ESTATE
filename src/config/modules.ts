@@ -4,6 +4,7 @@ import {
   CalendarClock,
   Columns3,
   Inbox,
+  Megaphone,
   LayoutDashboard,
   Settings,
   Sparkles,
@@ -43,6 +44,15 @@ export const MODULES = {
     icon: Inbox,
     permission: "conversations.view",
     buildPhase: 8,
+  },
+  leads: {
+    key: "leads",
+    href: "/leads",
+    label: "Leads",
+    description: "Leads de WhatsApp y anuncios: datos capturados, calificación, origen y costo por lead.",
+    icon: Megaphone,
+    permission: "contacts.view",
+    buildPhase: 26,
   },
   contacts: {
     key: "contacts",

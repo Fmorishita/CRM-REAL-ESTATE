@@ -42,6 +42,8 @@
 | **F23** | Signup + provisión de organización (owner) y aceptación de invitaciones al iniciar sesión (P0) | ✅ |
 | **F24** | IA multi-proveedor open-source: adaptador OpenAI-compatible (Groq, OpenRouter, DeepSeek, Ollama, OpenAI) por tarea; SDK Anthropic lazy | ✅ |
 | **F25** | "Ver como" — vista previa de solo lectura de un rol inferior (owner/admin), banner + submenú, sin escalación de permisos | ✅ |
+| **F26** | Lead management híbrido: webhook WhatsApp idempotente, atribución CTWA, reparto, Conversions API, gasto por anuncio, `/leads` | ✅ |
+| **F27** | Precalificación Legacy Capital (5 preguntas), ficha del lead en la bandeja, plantillas fuera de 24 h, coexistencia (ecos del teléfono), formulario web → CRM, extracción con IA | ✅ |
 | **—** | Performance: `loading.tsx` en todas las rutas (skeletons al navegar) + cold-start más ligero | ✅ |
 | **—** | Pulido móvil del Inbox (paneles, back, header compacto) + ocultar FAB redundante | ✅ |
 

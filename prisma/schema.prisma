@@ -67,6 +67,11 @@ model Organization {
   landingPages         LandingPage[]
   landingLeads         LandingLead[]
   clientPortalAccounts ClientPortalAccount[]
+  contactFacts         ContactFact[]
+  leadAttributions     LeadAttribution[]
+  assignmentLogs       AssignmentLog[]
+  capiEvents           CapiEvent[]
+  adInsights           AdInsightDaily[]
 
   @@map("organizations")
 }
@@ -150,6 +155,14 @@ model Membership {
   teamId         String?          @map("team_id") @db.Uuid
   branchId       String?          @map("branch_id") @db.Uuid
   status         MembershipStatus @default(active)
+  /// Receives new leads in the distribution ("Asignable / Recibe leads"). Independent of role.
+  assignable     Boolean          @default(false)
+  /// Target share (%) for the weighted ("Manual") distribution mode.
+  leadWeight     Int              @default(0) @map("lead_weight")
+  /// Weekly availability: { "mon": [["09:00","18:00"]], ... } in the org timezone.
+  schedule       Json?
+  /// Personal WhatsApp (E.164) for team alerts. Not used to talk to prospects.
+  notifyPhone    String?          @map("notify_phone")
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
 
@@ -229,9 +242,41 @@ model Contact {
   lastContactAt        DateTime?   @map("last_contact_at")
   nextFollowUpAt       DateTime?   @map("next_follow_up_at")
   customFields         Json?       @map("custom_fields")
-  createdAt            DateTime    @default(now()) @map("created_at")
-  updatedAt            DateTime    @updatedAt @map("updated_at")
-  deletedAt            DateTime?   @map("deleted_at")
+
+  // ── Lead management (WhatsApp lead-ops layer) ──────────────────────────────
+  /// WhatsApp user id (digits). One contact per WhatsApp identity per org.
+  waId                     String?     @map("wa_id")
+  /// Business-scoped user id, when Meta provides one instead of / besides wa_id.
+  bsuid                    String?
+  /// Profile name shown by WhatsApp. firstName/lastName hold the *declared* name.
+  whatsappName             String?     @map("whatsapp_name")
+  /// Human rating 0–5 ("estrellas"). Null = not rated. Never derived from AI data.
+  stars                    Int?
+  /// Commercial sub-stage (e.g. seguimiento, descartado_precio). Separate from data and rating.
+  subStage                 String?     @map("sub_stage")
+  outcome                  LeadOutcome @default(open)
+  outcomeReason            String?     @map("outcome_reason")
+  botEnabled               Boolean     @default(true) @map("bot_enabled")
+  botChangedAt             DateTime?   @map("bot_changed_at")
+  botChangedReason         String?     @map("bot_changed_reason")
+  botChangedByMembershipId String?     @map("bot_changed_by_membership_id") @db.Uuid
+  reactEnabled             Boolean     @default(true) @map("react_enabled")
+  reactChangedAt           DateTime?   @map("react_changed_at")
+  reactChangedReason       String?     @map("react_changed_reason")
+  archivedAt               DateTime?   @map("archived_at")
+  blockedAt                DateTime?   @map("blocked_at")
+  blockedReason            String?     @map("blocked_reason")
+  /// "Atención": a human was promised / requested. Cleared when a member replies.
+  attentionAt              DateTime?   @map("attention_at")
+  firstContactAt           DateTime?   @map("first_contact_at")
+  /// Last message *from the customer* — drives the 24h customer-service window.
+  lastInboundAt            DateTime?   @map("last_inbound_at")
+  lastOutboundAt           DateTime?   @map("last_outbound_at")
+  firstMemberReplyAt       DateTime?   @map("first_member_reply_at")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   leadSource         LeadSource?           @relation(fields: [leadSourceId], references: [id], onDelete: SetNull)
@@ -244,11 +289,23 @@ model Contact {
   visits             Visit[]
   landingLeads       LandingLead[]
   portalAccounts     ClientPortalAccount[]
+  facts              ContactFact[]
+  attributions       LeadAttribution[]
+  assignmentLogs     AssignmentLog[]
+  capiEvents         CapiEvent[]
 
+  @@unique([organizationId, waId])
   @@index([organizationId, createdAt])
   @@index([organizationId, assignedMembershipId])
   @@index([organizationId, stage])
+  @@index([organizationId, lastInboundAt])
   @@map("contacts")
+}
+
+enum LeadOutcome {
+  open
+  won
+  lost
 }
 
 model ContactPreference {
@@ -643,12 +700,15 @@ model ChannelAccount {
   name           String
   status         ChannelStatus @default(mock)
   credentialsRef String?       @map("credentials_ref")
+  /// Provider id used to route inbound webhooks (WhatsApp: phone_number_id).
+  externalId     String?       @map("external_id")
   settings       Json?
   createdAt      DateTime      @default(now()) @map("created_at")
 
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   conversations Conversation[]
 
+  @@unique([channel, externalId])
   @@index([organizationId, channel])
   @@map("channel_accounts")
 }
@@ -726,11 +786,17 @@ model Message {
   media              Json?
   externalId         String?          @map("external_id")
   status             MessageStatus    @default(sent)
+  statusAt           DateTime?        @map("status_at")
+  errorCode          String?          @map("error_code")
+  errorMessage       String?          @map("error_message")
+  /// "crm" | "whatsapp_business_app" (coexistence echo) | "template" | "automation".
+  sentVia            String?          @map("sent_via")
   sentAt             DateTime         @default(now()) @map("sent_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
+  @@unique([organizationId, externalId])
   @@index([conversationId, sentAt])
   @@map("messages")
 }
@@ -1015,4 +1081,201 @@ model ClientPortalAccount {
 
   @@unique([organizationId, email])
   @@map("client_portal_accounts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lead management: qualification data, attribution, intake, distribution and
+// the feedback loop with Meta (CAPI + ad insights). Data captured, human rating
+// and commercial stage stay separate dimensions (see docs/13).
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum FactSource {
+  ai
+  advisor
+  form
+  import
+  system
+}
+
+/// One captured datum per contact and key ("casas": name, purpose, bedrooms,
+/// budget, visit). Keeps who/what captured it and when, so a correction by an
+/// advisor never masquerades as the bot's reading.
+model ContactFact {
+  id                     String     @id @default(uuid(7)) @db.Uuid
+  organizationId         String     @map("organization_id") @db.Uuid
+  contactId              String     @map("contact_id") @db.Uuid
+  key                    String
+  value                  String
+  source                 FactSource
+  capturedAt             DateTime   @default(now()) @map("captured_at")
+  capturedByMembershipId String?    @map("captured_by_membership_id") @db.Uuid
+  updatedAt              DateTime   @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, key])
+  @@index([organizationId, key])
+  @@map("contact_facts")
+}
+
+enum AttributionChannel {
+  ctwa_ad
+  organic_whatsapp
+  web_form
+  import
+  manual
+}
+
+/// Where a lead came from. For click-to-WhatsApp the referral object of the
+/// first message is stored verbatim; isFirstTouch marks the credited touch
+/// (first-click rule) so a contact is never counted under two ads.
+model LeadAttribution {
+  id             String             @id @default(uuid(7)) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  contactId      String             @map("contact_id") @db.Uuid
+  channel        AttributionChannel
+  platform       String?
+  adId           String?            @map("ad_id")
+  adsetId        String?            @map("adset_id")
+  campaignId     String?            @map("campaign_id")
+  adName         String?            @map("ad_name")
+  campaignName   String?            @map("campaign_name")
+  sourceType     String?            @map("source_type")
+  sourceUrl      String?            @map("source_url")
+  headline       String?
+  body           String?
+  mediaType      String?            @map("media_type")
+  mediaUrl       String?            @map("media_url")
+  ctwaClid       String?            @map("ctwa_clid")
+  utm            Json?
+  isFirstTouch   Boolean            @default(false) @map("is_first_touch")
+  occurredAt     DateTime           @map("occurred_at")
+  raw            Json?
+  createdAt      DateTime           @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, adId])
+  @@index([organizationId, occurredAt])
+  @@index([contactId])
+  @@map("lead_attributions")
+}
+
+enum WebhookEventStatus {
+  received
+  processed
+  failed
+  ignored
+}
+
+/// Raw provider events, stored before processing. The unique key makes a
+/// repeated delivery a no-op and lets failed events be reprocessed.
+model WebhookEvent {
+  id             String             @id @default(uuid(7)) @db.Uuid
+  organizationId String?            @map("organization_id") @db.Uuid
+  provider       String
+  eventKey       String             @map("event_key")
+  eventType      String             @map("event_type")
+  payload        Json
+  status         WebhookEventStatus @default(received)
+  error          String?
+  attempts       Int                @default(0)
+  receivedAt     DateTime           @default(now()) @map("received_at")
+  processedAt    DateTime?          @map("processed_at")
+
+  @@unique([provider, eventKey])
+  @@index([status, receivedAt])
+  @@map("webhook_events")
+}
+
+enum AssignmentReason {
+  auto_equitable
+  auto_weighted
+  manual
+  campaign
+  fallback
+}
+
+/// Every change of responsible advisor and why. Membership ids are kept as
+/// plain ids so history survives removing a member.
+model AssignmentLog {
+  id                String           @id @default(uuid(7)) @db.Uuid
+  organizationId    String           @map("organization_id") @db.Uuid
+  contactId         String           @map("contact_id") @db.Uuid
+  fromMembershipId  String?          @map("from_membership_id") @db.Uuid
+  toMembershipId    String?          @map("to_membership_id") @db.Uuid
+  reason            AssignmentReason
+  actorMembershipId String?          @map("actor_membership_id") @db.Uuid
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, toMembershipId, createdAt])
+  @@index([contactId])
+  @@map("assignment_logs")
+}
+
+enum CapiEventStatus {
+  pending
+  sent
+  failed
+  skipped
+}
+
+/// Conversion events sent back to Meta (Conversions API for business
+/// messaging). eventId is deterministic per contact+trigger, so a lead is
+/// reported once per milestone.
+model CapiEvent {
+  id             String          @id @default(uuid(7)) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  contactId      String?         @map("contact_id") @db.Uuid
+  trigger        String
+  eventName      String          @map("event_name")
+  eventId        String          @map("event_id")
+  eventTime      DateTime        @map("event_time")
+  status         CapiEventStatus @default(pending)
+  payload        Json
+  response       Json?
+  error          String?
+  attempts       Int             @default(0)
+  sentAt         DateTime?       @map("sent_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, eventId])
+  @@index([organizationId, createdAt])
+  @@map("capi_events")
+}
+
+/// Daily per-ad delivery and cost pulled from the Marketing API, joined with
+/// lead attribution to compute cost per lead / qualified lead / visit.
+model AdInsightDaily {
+  id                   String   @id @default(uuid(7)) @db.Uuid
+  organizationId       String   @map("organization_id") @db.Uuid
+  date                 DateTime @db.Date
+  adAccountId          String   @map("ad_account_id")
+  campaignId           String?  @map("campaign_id")
+  campaignName         String?  @map("campaign_name")
+  adsetId              String?  @map("adset_id")
+  adId                 String   @map("ad_id")
+  adName               String?  @map("ad_name")
+  spend                Decimal  @default(0) @db.Decimal(14, 2)
+  currency             String
+  impressions          Int      @default(0)
+  reach                Int      @default(0)
+  clicks               Int      @default(0)
+  conversationsStarted Int      @default(0) @map("conversations_started")
+  syncedAt             DateTime @default(now()) @map("synced_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, adId, date])
+  @@index([organizationId, date])
+  @@map("ad_insights_daily")
 }

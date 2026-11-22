@@ -74,6 +74,16 @@ export const AI_TASKS: Record<AiTaskKey, AiTaskDef> = {
     requiresApprovalDefault: false,
     phase: 14,
   },
+  extract_lead_facts: {
+    key: "extract_lead_facts",
+    label: "Extraer precalificación",
+    description: "Lee el chat y llena las 5 respuestas de precalificación (recámaras, propósito, pago, plazo, contacto).",
+    defaultProvider: "mock",
+    defaultModel: "mock-1",
+    defaultTemperature: 0,
+    requiresApprovalDefault: false,
+    phase: 27,
+  },
 };
 
 export const AI_TASK_LIST: AiTaskDef[] = Object.values(AI_TASKS);

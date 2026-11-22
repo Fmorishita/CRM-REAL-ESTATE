@@ -46,6 +46,14 @@ export function InboxFilters({ counts }: Props) {
     { key: "attention", label: "Atención", count: counts.needsAttention, patch: { unassigned: null, status: "needs_attention" } },
   ];
 
+  const leadFilter = searchParams.get("lead");
+  const leadChips = [
+    { key: "attention", label: "Requieren humano" },
+    { key: "hot", label: "Calientes" },
+    { key: "window_open", label: "24 h abierta" },
+    { key: "window_closed", label: "24 h cerrada" },
+  ];
+
   return (
     <div className="space-y-2 border-b border-border p-3">
       <div className="flex items-center gap-1">
@@ -62,6 +70,26 @@ export function InboxFilters({ counts }: Props) {
             <span className="text-[10px] text-muted-foreground">{tab.count}</span>
           </button>
         ))}
+      </div>
+      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5" role="group" aria-label="Filtros de leads">
+        {leadChips.map((chip) => {
+          const active = leadFilter === chip.key;
+          return (
+            <button
+              key={chip.key}
+              aria-pressed={active}
+              onClick={() => update({ lead: active ? null : chip.key })}
+              className={cn(
+                "shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] transition-colors",
+                active
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {chip.label}
+            </button>
+          );
+        })}
       </div>
       <Select value={searchParams.get("channel") ?? ALL} onValueChange={(v) => update({ channel: v })}>
         <SelectTrigger className="w-full" size="sm">

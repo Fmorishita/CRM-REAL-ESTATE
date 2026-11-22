@@ -18,10 +18,21 @@ export interface SendResult {
   error?: string;
 }
 
+/** Approved WhatsApp template (the only thing allowed outside the 24h window). */
+export interface TemplateMessage {
+  to: string;
+  name: string;
+  language: string;
+  /** Values for {{1}}, {{2}}… in the template body, in order. */
+  bodyParams: string[];
+}
+
 export interface ChannelAdapter {
   readonly channel: "whatsapp" | "email" | "instagram" | "facebook" | "webchat";
   readonly mode: "mock" | "live";
   send(message: OutboundMessage): Promise<SendResult>;
+  /** WhatsApp only. */
+  sendTemplate?(message: TemplateMessage): Promise<SendResult>;
 }
 
 export type ChannelKind = ChannelAdapter["channel"];

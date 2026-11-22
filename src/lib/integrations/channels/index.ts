@@ -1,7 +1,13 @@
 import "server-only";
 
 import { hasEnv } from "@/lib/integrations/env";
-import type { ChannelAdapter, ChannelKind, OutboundMessage, SendResult } from "@/lib/integrations/channels/types";
+import type {
+  ChannelAdapter,
+  ChannelKind,
+  OutboundMessage,
+  SendResult,
+  TemplateMessage,
+} from "@/lib/integrations/channels/types";
 
 /** Mock adapter: pretends to deliver and returns a synthetic external id. */
 function createMockAdapter(channel: ChannelKind): ChannelAdapter {
@@ -12,10 +18,45 @@ function createMockAdapter(channel: ChannelKind): ChannelAdapter {
       void message;
       return { ok: true, externalId: `mock_${channel}_${Date.now()}` };
     },
+    async sendTemplate(message: TemplateMessage): Promise<SendResult> {
+      void message;
+      return { ok: true, externalId: `mock_${channel}_tpl_${Date.now()}` };
+    },
   };
 }
 
-const GRAPH_VERSION = "v21.0";
+const GRAPH_VERSION = process.env.META_GRAPH_VERSION?.trim() || "v23.0";
+
+/** Readable error from a Graph API failure body (never includes the token). */
+async function graphError(res: Response, prefix: string): Promise<string> {
+  const detail = await res.text();
+  try {
+    const parsed = JSON.parse(detail) as { error?: { message?: string; code?: number; error_data?: { details?: string } } };
+    const e = parsed.error;
+    if (e) return `${prefix} ${e.code ?? res.status}: ${e.error_data?.details ?? e.message ?? "error"}`.slice(0, 300);
+  } catch {
+    // not JSON
+  }
+  return `${prefix} ${res.status}: ${detail.slice(0, 200)}`;
+}
+
+async function postWhatsApp(payload: Record<string, unknown>): Promise<SendResult> {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID!;
+  const token = process.env.WHATSAPP_ACCESS_TOKEN!;
+  try {
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", ...payload }),
+      cache: "no-store",
+    });
+    if (!res.ok) return { ok: false, error: await graphError(res, "WhatsApp") };
+    const data = (await res.json()) as { messages?: { id: string }[] };
+    return { ok: true, externalId: data.messages?.[0]?.id };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "send failed" };
+  }
+}
 
 /**
  * Live WhatsApp adapter via the Meta WhatsApp Business Cloud API. Activated only
@@ -25,30 +66,18 @@ function createWhatsAppAdapter(): ChannelAdapter {
   return {
     channel: "whatsapp",
     mode: "live",
-    async send(message: OutboundMessage): Promise<SendResult> {
-      const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID!;
-      const token = process.env.WHATSAPP_ACCESS_TOKEN!;
-      try {
-        const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: message.to,
-            type: "text",
-            text: { preview_url: false, body: message.body },
-          }),
-        });
-        if (!res.ok) {
-          const detail = await res.text();
-          return { ok: false, error: `WhatsApp API ${res.status}: ${detail.slice(0, 200)}` };
-        }
-        const data = (await res.json()) as { messages?: { id: string }[] };
-        return { ok: true, externalId: data.messages?.[0]?.id };
-      } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : "send failed" };
-      }
+    send(message: OutboundMessage): Promise<SendResult> {
+      return postWhatsApp({ to: message.to, type: "text", text: { preview_url: false, body: message.body } });
+    },
+    sendTemplate(message: TemplateMessage): Promise<SendResult> {
+      const components = message.bodyParams.length
+        ? [{ type: "body", parameters: message.bodyParams.map((text) => ({ type: "text", text })) }]
+        : [];
+      return postWhatsApp({
+        to: message.to,
+        type: "template",
+        template: { name: message.name, language: { code: message.language }, components },
+      });
     },
   };
 }
@@ -77,10 +106,7 @@ function createMetaAdapter(channel: "instagram" | "facebook"): ChannelAdapter {
             }),
           },
         );
-        if (!res.ok) {
-          const detail = await res.text();
-          return { ok: false, error: `Meta Graph ${res.status}: ${detail.slice(0, 200)}` };
-        }
+        if (!res.ok) return { ok: false, error: await graphError(res, "Meta Graph") };
         const data = (await res.json()) as { message_id?: string };
         return { ok: true, externalId: data.message_id };
       } catch (error) {
