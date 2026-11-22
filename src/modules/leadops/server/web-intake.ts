@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { phoneVariants, type WebFormLead } from "@/lib/leadops/web-form";
 import { applyFacts } from "@/modules/leadops/server/facts";
 import { chooseAssignee } from "@/modules/leadops/server/ingest";
+import { resolveLeadOrganizationId } from "@/modules/leadops/server/organization";
 
 export type WebIntakeResult =
   | { status: "created" | "updated" | "duplicate"; contactId: string }
@@ -17,12 +18,9 @@ export type WebIntakeResult =
  * "form" and never overwrite an advisor's correction. Idempotent per form row.
  */
 export async function ingestWebFormLead(lead: WebFormLead): Promise<WebIntakeResult> {
-  const orgSlug = process.env.LEADOPS_ORGANIZATION_SLUG?.trim();
-  if (!orgSlug) return { status: "ignored", reason: "LEADOPS_ORGANIZATION_SLUG no configurado" };
-  const org = await prisma.organization.findUnique({ where: { slug: orgSlug }, select: { id: true } });
-  if (!org) return { status: "ignored", reason: "organización no encontrada" };
+  const organizationId = await resolveLeadOrganizationId();
+  if (!organizationId) return { status: "ignored", reason: "organización de leads no configurada (LEADOPS_ORGANIZATION_SLUG)" };
   if (!lead.phone && !lead.email) return { status: "ignored", reason: "sin teléfono ni email" };
-  const organizationId = org.id;
 
   // Idempotency: the same form row (Supabase may retry) is processed once,
   // unless the row gained new answers (UPDATE from step 2 of the form).

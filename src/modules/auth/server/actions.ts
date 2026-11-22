@@ -7,7 +7,13 @@ import { isAuthEnabled } from "@/lib/auth/config";
 import { clearAuthCookie, readAuthCookie, sessionToCookie, setAuthCookie } from "@/lib/auth/cookie";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { fail, type ActionResult } from "@/lib/result";
-import { signInWithPassword, signOutGoTrue, signUpWithPassword } from "@/lib/supabase/gotrue";
+import {
+  requestPasswordRecovery,
+  signInWithPassword,
+  signOutGoTrue,
+  signUpWithPassword,
+  updatePasswordWithToken,
+} from "@/lib/supabase/gotrue";
 import type { TenantContext } from "@/lib/auth/types";
 import { activateInvitedMemberships, resolveTenantForEmail } from "@/modules/organizations/server/tenant";
 import { provisionOrganization } from "@/modules/organizations/server/provisioning";
@@ -135,4 +141,44 @@ export async function signOutAction(): Promise<void> {
   if (session) await signOutGoTrue(session.accessToken);
   await clearAuthCookie();
   redirect("/login");
+}
+
+const forgotSchema = z.object({ email: z.string().email() });
+
+/**
+ * "¿Olvidaste tu contraseña?": sends Supabase's recovery email. The answer is
+ * the same whether or not the email exists, so accounts can't be enumerated.
+ */
+export async function requestPasswordResetAction(
+  _prev: ActionResult<{ sent: true }> | null,
+  formData: FormData,
+): Promise<ActionResult<{ sent: true }>> {
+  if (!isAuthEnabled()) return fail("La autenticación no está habilitada en este entorno (modo demo).");
+  const parsed = forgotSchema.safeParse({ email: formData.get("email") });
+  if (!parsed.success) return fail("Ingresa un email válido.");
+  const limit = rateLimit(await clientKey("app-forgot"), 3, 60_000);
+  if (!limit.allowed) return fail(`Demasiados intentos. Espera ${limit.retryAfterSeconds}s.`);
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  await requestPasswordRecovery(parsed.data.email.trim().toLowerCase(), `${appUrl}/reset-password`);
+  return { ok: true, data: { sent: true } };
+}
+
+const resetSchema = z.object({
+  accessToken: z.string().min(20),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres.").max(72),
+});
+
+/** Sets the new password with the recovery token from the email link, then asks to sign in. */
+export async function resetPasswordAction(input: unknown): Promise<ActionResult<void>> {
+  if (!isAuthEnabled()) return fail("La autenticación no está habilitada en este entorno (modo demo).");
+  const parsed = resetSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Datos inválidos.");
+  const limit = rateLimit(await clientKey("app-reset"), 5, 60_000);
+  if (!limit.allowed) return fail(`Demasiados intentos. Espera ${limit.retryAfterSeconds}s.`);
+
+  const user = await updatePasswordWithToken(parsed.data.accessToken, parsed.data.password);
+  if (!user) return fail("El enlace expiró o ya se usó. Pide uno nuevo.");
+  await signOutGoTrue(parsed.data.accessToken);
+  return { ok: true, data: undefined };
 }

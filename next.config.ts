@@ -13,7 +13,22 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
 ];
 
+/**
+ * Optional sub-path, e.g. "/realtorpro" to serve the CRM at
+ * legacycapitalmx.com/realtorpro (the main site rewrites that path here).
+ * Build-time setting: empty keeps the app at the root.
+ */
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH?.trim().replace(/\/$/, "") || undefined;
+
+/** Hosts that proxy to this app; Server Actions accept requests coming through them. */
+const proxyOrigins = (process.env.APP_PROXY_ORIGINS ?? "")
+  .split(",")
+  .map((h) => h.trim())
+  .filter(Boolean);
+
 const nextConfig: NextConfig = {
+  basePath,
+  experimental: proxyOrigins.length ? { serverActions: { allowedOrigins: proxyOrigins } } : undefined,
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
@@ -22,6 +37,10 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
+  },
+  async redirects() {
+    // With a base path, the bare deployment root sends people to the app.
+    return basePath ? [{ source: "/", destination: basePath, permanent: false, basePath: false }] : [];
   },
 };
 

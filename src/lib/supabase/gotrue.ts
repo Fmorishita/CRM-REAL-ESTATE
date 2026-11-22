@@ -149,3 +149,45 @@ export async function signOutGoTrue(accessToken: string): Promise<void> {
     console.error("signOutGoTrue failed:", error);
   }
 }
+
+/**
+ * Sends Supabase's password-recovery email. The link returns to `redirectTo`
+ * with a short-lived recovery token in the URL fragment. Always resolves; the
+ * caller never reveals whether the email exists.
+ */
+export async function requestPasswordRecovery(email: string, redirectTo: string): Promise<boolean> {
+  const base = authBase();
+  if (!base) return false;
+  try {
+    const res = await fetch(`${base.url}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
+      method: "POST",
+      headers: { apikey: base.anonKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch (error) {
+    console.error("requestPasswordRecovery failed:", error);
+    return false;
+  }
+}
+
+/** Sets a new password with the recovery access token from the email link. */
+export async function updatePasswordWithToken(accessToken: string, password: string): Promise<GoTrueUser | null> {
+  const base = authBase();
+  if (!base) return null;
+  try {
+    const res = await fetch(`${base.url}/auth/v1/user`, {
+      method: "PUT",
+      headers: { apikey: base.anonKey, Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { id: string; email?: string | null };
+    return { id: data.id, email: (data.email ?? "").toLowerCase() };
+  } catch (error) {
+    console.error("updatePasswordWithToken failed:", error);
+    return null;
+  }
+}

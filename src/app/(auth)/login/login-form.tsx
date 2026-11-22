@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Building2, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,15 @@ export function LoginForm({
     initialError ? fail(initialError) : null,
   );
   const errorMessage = state && !state.ok ? state.error : null;
+  const router = useRouter();
+
+  // Supabase recovery links may land on the site URL: forward the token
+  // (kept in the fragment, never in the query) to the reset screen.
+  useEffect(() => {
+    if (window.location.hash.includes("type=recovery")) {
+      router.replace(`/reset-password${window.location.hash}`);
+    }
+  }, [router]);
 
   return (
     <Card className="w-full max-w-sm">
@@ -52,7 +62,12 @@ export function LoginForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password">Contraseña</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Contraseña</Label>
+              <Link href="/forgot-password" className="text-xs text-muted-foreground hover:text-primary hover:underline">
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
             <Input id="password" name="password" type="password" autoComplete="current-password" required />
           </div>
           {errorMessage ? (

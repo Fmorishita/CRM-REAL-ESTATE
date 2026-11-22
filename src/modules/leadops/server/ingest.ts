@@ -15,6 +15,7 @@ import { pickAssignee } from "@/lib/leadops/rules";
 import { phoneVariants } from "@/lib/leadops/web-form";
 import { reportMilestone } from "@/modules/leadops/server/capi";
 import { applyFacts } from "@/modules/leadops/server/facts";
+import { resolveLeadOrganizationId } from "@/modules/leadops/server/organization";
 
 /**
  * Turns verified WhatsApp webhook events into CRM state:
@@ -34,12 +35,11 @@ async function resolveChannel(phoneNumberId: string): Promise<ChannelRoute | nul
 
   // Bootstrap: the configured number + org slug create the channel row on first use.
   const envNumber = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
-  const orgSlug = process.env.LEADOPS_ORGANIZATION_SLUG?.trim();
-  if (!envNumber || envNumber !== phoneNumberId || !orgSlug) return null;
-  const org = await prisma.organization.findUnique({ where: { slug: orgSlug }, select: { id: true } });
-  if (!org) return null;
+  if (!envNumber || envNumber !== phoneNumberId) return null;
+  const organizationId = await resolveLeadOrganizationId();
+  if (!organizationId) return null;
   return prisma.channelAccount.create({
-    data: { organizationId: org.id, channel: "whatsapp", name: "WhatsApp Business", status: "connected", externalId: phoneNumberId },
+    data: { organizationId, channel: "whatsapp", name: "WhatsApp Business", status: "connected", externalId: phoneNumberId },
     select: { id: true, organizationId: true },
   });
 }
