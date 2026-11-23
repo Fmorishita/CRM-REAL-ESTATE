@@ -1,6 +1,7 @@
 import "server-only";
 
 import { hasEnv } from "@/lib/integrations/env";
+import { buildMessageRequest, resolvePageToken } from "@/lib/social/meta-auth";
 import type {
   ChannelAdapter,
   ChannelKind,
@@ -83,29 +84,28 @@ function createWhatsAppAdapter(): ChannelAdapter {
 }
 
 /**
- * Live adapter for Instagram DMs and Facebook Messenger via the Graph API send
- * endpoint. Activated when META_PAGE_ACCESS_TOKEN is configured. `to` is the
- * platform-scoped recipient id from the inbound webhook.
+ * Live adapter for Instagram DMs and Facebook Messenger. Sends through the
+ * Page's messages edge (/{META_PAGE_ID}/messages) with the page's access token,
+ * so it works whether META_PAGE_ACCESS_TOKEN is a page token or a system-user
+ * token. `to` is the platform-scoped recipient id of the thread.
  */
 function createMetaAdapter(channel: "instagram" | "facebook"): ChannelAdapter {
   return {
     channel,
     mode: "live",
     async send(message: OutboundMessage): Promise<SendResult> {
-      const token = process.env.META_PAGE_ACCESS_TOKEN!;
+      const pageId = process.env.META_PAGE_ID?.trim();
+      if (!pageId) return { ok: false, error: "Falta META_PAGE_ID para enviar mensajes de Meta." };
+      if (!message.to) return { ok: false, error: "La conversación no tiene destinatario de Meta." };
       try {
-        const res = await fetch(
-          `https://graph.facebook.com/${GRAPH_VERSION}/me/messages?access_token=${encodeURIComponent(token)}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              recipient: { id: message.to },
-              messaging_type: "RESPONSE",
-              message: { text: message.body },
-            }),
-          },
-        );
+        const token = await resolvePageToken(process.env.META_PAGE_ACCESS_TOKEN!.trim(), pageId);
+        const req = buildMessageRequest(pageId, message.to, message.body);
+        const res = await fetch(req.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(req.body),
+          cache: "no-store",
+        });
         if (!res.ok) return { ok: false, error: await graphError(res, "Meta Graph") };
         const data = (await res.json()) as { message_id?: string };
         return { ok: true, externalId: data.message_id };
@@ -129,7 +129,7 @@ export function getChannelAdapter(channel: ChannelKind): ChannelAdapter {
         : createMockAdapter(channel);
     case "instagram":
     case "facebook":
-      return hasEnv("META_PAGE_ACCESS_TOKEN") ? createMetaAdapter(channel) : createMockAdapter(channel);
+      return hasEnv("META_PAGE_ACCESS_TOKEN", "META_PAGE_ID") ? createMetaAdapter(channel) : createMockAdapter(channel);
     default:
       return createMockAdapter(channel);
   }

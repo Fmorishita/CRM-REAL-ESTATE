@@ -1,5 +1,7 @@
 import "server-only";
 
+import { GRAPH_BASE, resolvePageToken } from "@/lib/social/meta-auth";
+
 /**
  * Facebook Page + Instagram professional account publishing through the Graph
  * API. Needs a Page access token with pages_manage_posts, pages_read_engagement,
@@ -8,7 +10,7 @@ import "server-only";
  * Meta is the source of truth: posts are read back from it, not stored here.
  */
 
-const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION?.trim() || "v23.0"}`;
+const GRAPH = GRAPH_BASE;
 
 export interface SocialConfig {
   pageId: string | null;
@@ -22,12 +24,13 @@ export function socialConfig(): SocialConfig {
   return { pageId, igUserId, connected: Boolean(process.env.META_PAGE_ACCESS_TOKEN?.trim() && pageId) };
 }
 
-function token(): string {
-  return process.env.META_PAGE_ACCESS_TOKEN!.trim();
+/** Page access token (minted from a system-user token when needed). */
+async function token(): Promise<string> {
+  return resolvePageToken(process.env.META_PAGE_ACCESS_TOKEN!.trim(), process.env.META_PAGE_ID!.trim());
 }
 
 async function graph<T>(path: string, init?: { method?: "GET" | "POST"; params?: Record<string, string> }): Promise<T> {
-  const params = new URLSearchParams({ ...(init?.params ?? {}), access_token: token() });
+  const params = new URLSearchParams({ ...(init?.params ?? {}), access_token: await token() });
   const isPost = init?.method === "POST";
   const res = await fetch(isPost ? `${GRAPH}${path}` : `${GRAPH}${path}?${params}`, {
     method: init?.method ?? "GET",
@@ -133,7 +136,7 @@ export async function fetchSocialProfile(
   network: "facebook" | "instagram",
   userId: string,
 ): Promise<{ firstName: string; lastName: string; username: string | null } | null> {
-  if (!process.env.META_PAGE_ACCESS_TOKEN?.trim()) return null;
+  if (!process.env.META_PAGE_ACCESS_TOKEN?.trim() || !process.env.META_PAGE_ID?.trim()) return null;
   try {
     if (network === "facebook") {
       const p = await graph<{ first_name?: string; last_name?: string }>(`/${userId}`, { params: { fields: "first_name,last_name" } });
