@@ -66,3 +66,32 @@ export function buildMessageRequest(pageId: string, to: string, text: string): S
     body: { recipient: { id: to }, messaging_type: "RESPONSE", message: { text } },
   };
 }
+
+export type AttachmentKind = "image" | "video" | "audio" | "document";
+
+/**
+ * Messenger / Instagram attachment request. Meta downloads `url`, so it must be
+ * public. Generic files are "file" in the Messenger API; Instagram rejects them
+ * (checked earlier by checkOutgoingMedia).
+ */
+export function buildAttachmentRequest(pageId: string, to: string, kind: AttachmentKind, url: string) {
+  return {
+    url: `${GRAPH_BASE}/${pageId}/messages`,
+    body: {
+      recipient: { id: to },
+      messaging_type: "RESPONSE" as const,
+      message: { attachment: { type: kind === "document" ? "file" : kind, payload: { url, is_reusable: false } } },
+    },
+  };
+}
+
+/**
+ * WhatsApp media message by link. Captions exist for image, video and document
+ * (not audio); documents carry their file name.
+ */
+export function buildWhatsAppMediaPayload(to: string, kind: AttachmentKind, url: string, opts: { caption?: string; fileName?: string } = {}) {
+  const media: Record<string, unknown> = { link: url };
+  if (opts.caption && kind !== "audio") media.caption = opts.caption;
+  if (kind === "document" && opts.fileName) media.filename = opts.fileName;
+  return { to, type: kind, [kind]: media };
+}

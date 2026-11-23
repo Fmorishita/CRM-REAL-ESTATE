@@ -29,6 +29,8 @@ export interface ChatMessage {
   sentVia?: string | null;
   /** Provider error for failed outbound messages. */
   error?: string | null;
+  /** Photos, voice notes, videos and documents attached to the message. */
+  media?: { type: "image" | "video" | "audio" | "document"; url: string; name?: string }[];
 }
 
 export interface LeadFactState {
@@ -71,6 +73,8 @@ export interface ConversationDetail {
   contactId: string | null;
   contactName: string;
   contactPhone: string | null;
+  /** Placeholder name ("Contacto de Instagram"): offer to re-read the profile. */
+  needsProfileRefresh?: boolean;
   status: string;
   priority: "low" | "normal" | "high";
   assignedMembershipId: string | null;

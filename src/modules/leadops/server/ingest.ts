@@ -15,6 +15,7 @@ import { pickAssignee } from "@/lib/leadops/rules";
 import { phoneVariants } from "@/lib/leadops/web-form";
 import { reportMilestone } from "@/modules/leadops/server/capi";
 import { applyFacts } from "@/modules/leadops/server/facts";
+import { persistWhatsAppMedia } from "@/modules/leadops/server/whatsapp-media";
 import { resolveLeadOrganizationId } from "@/modules/leadops/server/organization";
 
 /**
@@ -187,6 +188,9 @@ async function handleMessage(e: InboundMessageEvent, route: ChannelRoute): Promi
     });
   }
 
+  // Copy the customer's photo / voice note / document into Storage so it stays viewable.
+  const storedMedia = e.media ? await persistWhatsAppMedia(organizationId, e.media) : null;
+
   await prisma.$transaction([
     prisma.message.create({
       data: {
@@ -198,7 +202,7 @@ async function handleMessage(e: InboundMessageEvent, route: ChannelRoute): Promi
         externalId: e.messageId,
         status: "delivered",
         sentAt: e.timestamp,
-        media: e.type === "text" ? undefined : ({ type: e.type } as Prisma.InputJsonValue),
+        media: storedMedia ? ([storedMedia] as unknown as Prisma.InputJsonValue) : e.type === "text" ? undefined : ({ type: e.type } as Prisma.InputJsonValue),
       },
     }),
     prisma.conversation.update({

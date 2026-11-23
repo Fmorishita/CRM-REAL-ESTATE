@@ -27,12 +27,24 @@ export interface TemplateMessage {
   bodyParams: string[];
 }
 
+/** Attachment sent by public URL (Meta fetches it). */
+export interface MediaMessage {
+  to: string;
+  kind: "image" | "video" | "audio" | "document";
+  url: string;
+  fileName?: string;
+  /** Shown with the file where the channel supports captions. */
+  caption?: string;
+}
+
 export interface ChannelAdapter {
   readonly channel: "whatsapp" | "email" | "instagram" | "facebook" | "webchat";
   readonly mode: "mock" | "live";
   send(message: OutboundMessage): Promise<SendResult>;
   /** WhatsApp only. */
   sendTemplate?(message: TemplateMessage): Promise<SendResult>;
+  /** WhatsApp, Messenger and Instagram. */
+  sendMedia?(message: MediaMessage): Promise<SendResult>;
 }
 
 export type ChannelKind = ChannelAdapter["channel"];

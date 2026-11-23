@@ -12,13 +12,17 @@ import {
   CheckSquare,
   ChevronLeft,
   Clock,
+  FileText,
   Loader2,
   PanelRight,
+  Paperclip,
+  RefreshCw,
   Send,
   Smartphone,
   Sparkles,
   StickyNote,
   User,
+  X,
   Wand2,
   Zap,
 } from "lucide-react";
@@ -50,10 +54,18 @@ import { getInitials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ChannelIcon } from "@/modules/dashboard/components/channel-badge";
 import {
+  acceptAttribute,
+  checkOutgoingMedia,
+  type MediaChannel,
+} from "@/lib/media/rules";
+import {
   addConversationNote,
   assignConversation,
+  createMediaUpload,
   createTaskFromConversation,
   recommendProperty,
+  refreshSocialProfile,
+  sendMediaMessage,
   sendMessage,
   setConversationStatus,
   suggestReplyWithAi,
@@ -94,6 +106,42 @@ export function ConversationView({
   const [taskOpen, setTaskOpen] = React.useState(false);
   const [taskTitle, setTaskTitle] = React.useState("");
   const [suggesting, setSuggesting] = React.useState(false);
+  const [file, setFile] = React.useState<File | null>(null);
+  const fileInput = React.useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = React.useState<string | null>(null);
+
+  /** The preview URL is created when a file is picked and released when it is removed or sent. */
+  function setAttachment(next: File | null) {
+    setPreview((old) => {
+      if (old) URL.revokeObjectURL(old);
+      return next && next.type.startsWith("image/") ? URL.createObjectURL(next) : null;
+    });
+    setFile(next);
+  }
+  const mediaChannel: MediaChannel | null =
+    conversation.channel === "whatsapp" || conversation.channel === "instagram" || conversation.channel === "facebook"
+      ? conversation.channel
+      : null;
+
+  function onPickFile(picked: File | null) {
+    if (!picked || !mediaChannel) return;
+    const check = checkOutgoingMedia(mediaChannel, picked.type, picked.size);
+    if (!check.ok) {
+      toast.error(check.error);
+      return;
+    }
+    setAttachment(picked);
+  }
+
+  async function onRefreshProfile() {
+    const result = await refreshSocialProfile({ conversationId: conversation.id });
+    if (result.ok) {
+      toast.success(`Nombre actualizado: ${result.data.name}`);
+      router.refresh();
+    } else {
+      toast.error(result.error);
+    }
+  }
 
   async function onSuggest() {
     setSuggesting(true);
@@ -118,8 +166,55 @@ export function ConversationView({
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
 
+  /** Browser → Storage (signed URL) → channel. Large files never pass through the server. */
+  async function sendFile(picked: File, caption: string) {
+    setSending(true);
+    try {
+      const prepared = await createMediaUpload({ conversationId: conversation.id, fileName: picked.name, mime: picked.type, size: picked.size });
+      if (!prepared.ok) {
+        toast.error(prepared.error);
+        return;
+      }
+      // Same call supabase-js makes for signed uploads: multipart with the file as the unnamed part.
+      const form = new FormData();
+      form.append("cacheControl", "3600");
+      form.append("", picked);
+      const upload = await fetch(prepared.data.uploadUrl, { method: "PUT", body: form });
+      if (!upload.ok) {
+        toast.error("No se pudo subir el archivo. Inténtalo de nuevo.");
+        return;
+      }
+      const sent = await sendMediaMessage({
+        conversationId: conversation.id,
+        path: prepared.data.path,
+        fileName: picked.name,
+        mime: picked.type,
+        size: picked.size,
+        caption: caption || undefined,
+      });
+      if (sent.ok) {
+        setAttachment(null);
+        setBody("");
+        toast.success("Archivo enviado.");
+      } else {
+        toast.error(sent.error);
+      }
+      router.refresh();
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function onSend() {
     const text = body.trim();
+    if (file) {
+      if (!persist) {
+        toast.info("Modo demo: el archivo no se envía.");
+        return;
+      }
+      await sendFile(file, text);
+      return;
+    }
     if (!text) return;
     setSending(true);
     setMessages((prev) => [
@@ -187,6 +282,17 @@ export function ConversationView({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="truncate font-medium text-foreground">{conversation.contactName}</span>
+              {conversation.needsProfileRefresh && persist ? (
+                <button
+                  type="button"
+                  onClick={onRefreshProfile}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted"
+                  title="Volver a pedirle a Meta el nombre de este usuario"
+                >
+                  <RefreshCw className="size-3" />
+                  Obtener nombre
+                </button>
+              ) : null}
               <ChannelIcon channel={conversation.channel} className="shrink-0" />
             </div>
             <span className="text-xs text-muted-foreground">{channelLabel(conversation.channel)}</span>
@@ -416,7 +522,40 @@ export function ConversationView({
               </button>
             ))}
           </div>
+          {file ? (
+            <div className="mb-2 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs">
+              {preview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={preview} alt="" className="size-10 rounded object-cover" />
+              ) : (
+                <FileText className="size-5 shrink-0 text-muted-foreground" />
+              )}
+              <span className="min-w-0 flex-1 truncate">
+                {file.name} <span className="text-muted-foreground">· {(file.size / 1024 / 1024).toFixed(1)} MB</span>
+              </span>
+              <button type="button" onClick={() => setAttachment(null)} aria-label="Quitar archivo" className="rounded p-1 hover:bg-muted">
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ) : null}
           <div className="flex items-end gap-2">
+            {mediaChannel ? (
+              <>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  hidden
+                  accept={acceptAttribute(mediaChannel)}
+                  onChange={(e) => {
+                    onPickFile(e.target.files?.[0] ?? null);
+                    e.target.value = "";
+                  }}
+                />
+                <Button type="button" variant="outline" size="icon" disabled={windowClosed || sending} onClick={() => fileInput.current?.click()} aria-label="Adjuntar archivo" title="Adjuntar foto, video, audio o documento">
+                  <Paperclip />
+                </Button>
+              </>
+            ) : null}
             <Textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
@@ -426,12 +565,12 @@ export function ConversationView({
                   void onSend();
                 }
               }}
-              placeholder={windowClosed ? "Ventana cerrada: usa una plantilla" : "Escribe un mensaje… (⌘+Enter para enviar)"}
+              placeholder={windowClosed ? "Ventana cerrada: usa una plantilla" : file ? "Texto que acompaña al archivo (opcional)…" : "Escribe un mensaje… (⌘+Enter para enviar)"}
               disabled={windowClosed}
               rows={2}
               className="min-h-10 flex-1 resize-none"
             />
-            <Button onClick={onSend} disabled={sending || !body.trim() || windowClosed} size="icon" aria-label="Enviar mensaje">
+            <Button onClick={onSend} disabled={sending || (!body.trim() && !file) || windowClosed} size="icon" aria-label="Enviar mensaje">
               {sending ? <Loader2 className="animate-spin" /> : <Send />}
             </Button>
           </div>
@@ -449,6 +588,44 @@ export function ConversationView({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function MediaBlocks({ media, outbound }: { media: NonNullable<ChatMessage["media"]>; outbound: boolean }) {
+  return (
+    <div className="mb-1 space-y-1.5">
+      {media.map((m, i) => {
+        if (m.type === "image") {
+          return (
+            <a key={i} href={m.url} target="_blank" rel="noreferrer" className="block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={m.url} alt={m.name ?? "Imagen"} loading="lazy" className="max-h-72 w-full rounded-lg object-cover" />
+            </a>
+          );
+        }
+        if (m.type === "video") {
+          return <video key={i} src={m.url} controls preload="metadata" className="max-h-72 w-full rounded-lg bg-black" />;
+        }
+        if (m.type === "audio") {
+          return <audio key={i} src={m.url} controls preload="metadata" className="h-10 w-full min-w-56" />;
+        }
+        return (
+          <a
+            key={i}
+            href={m.url}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(
+              "flex items-center gap-2 rounded-lg border px-3 py-2 text-xs hover:underline",
+              outbound ? "border-white/25" : "border-border",
+            )}
+          >
+            <FileText className="size-4 shrink-0" />
+            <span className="truncate">{m.name ?? "Documento"}</span>
+          </a>
+        );
+      })}
     </div>
   );
 }
@@ -475,7 +652,10 @@ function MessageBubble({ message }: { message: ChatMessage }) {
               : "bg-muted text-foreground",
         )}
       >
-        <p className="whitespace-pre-wrap">{message.body}</p>
+        {message.media?.length ? <MediaBlocks media={message.media} outbound={outbound && !failed} /> : null}
+        {message.media?.length && /^\[[^\]]+\]$/.test(message.body.trim()) ? null : (
+          <p className="whitespace-pre-wrap">{message.body}</p>
+        )}
         <p
           className={cn(
             "mt-1 flex items-center gap-1 text-[10px]",

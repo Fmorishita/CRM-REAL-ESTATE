@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { buildMessageRequest, clearPageTokenCache, resolvePageToken, type FetchLike } from "@/lib/social/meta-auth";
+import {
+  buildAttachmentRequest,
+  buildMessageRequest,
+  buildWhatsAppMediaPayload,
+  clearPageTokenCache,
+  resolvePageToken,
+  type FetchLike,
+} from "@/lib/social/meta-auth";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
@@ -43,5 +50,28 @@ describe("Meta page-scoped sends", () => {
     expect(n).toBe(1);
     await resolvePageToken("S", "P", f, 1_000 + 51 * 60_000);
     expect(n).toBe(2);
+  });
+});
+
+describe("attachment requests", () => {
+  it("sends images, audio and video as native attachments through the page", () => {
+    const r = buildAttachmentRequest("PAGE", "IGSID", "audio", "https://cdn/x.m4a");
+    expect(r.url).toMatch(/\/PAGE\/messages$/);
+    expect(r.body.message.attachment).toEqual({ type: "audio", payload: { url: "https://cdn/x.m4a", is_reusable: false } });
+  });
+
+  it("maps documents to Messenger's 'file' type", () => {
+    expect(buildAttachmentRequest("PAGE", "PSID", "document", "https://cdn/c.pdf").body.message.attachment.type).toBe("file");
+  });
+
+  it("builds WhatsApp media with caption, and filename only for documents", () => {
+    expect(buildWhatsAppMediaPayload("5216460000000", "image", "https://cdn/a.jpg", { caption: "Casa 3R" })).toEqual({
+      to: "5216460000000", type: "image", image: { link: "https://cdn/a.jpg", caption: "Casa 3R" },
+    });
+    expect(buildWhatsAppMediaPayload("52", "document", "https://cdn/c.pdf", { caption: "Brochure", fileName: "Brochure.pdf" })).toMatchObject({
+      type: "document", document: { link: "https://cdn/c.pdf", caption: "Brochure", filename: "Brochure.pdf" },
+    });
+    // WhatsApp does not allow captions on audio.
+    expect(buildWhatsAppMediaPayload("52", "audio", "https://cdn/v.mp3", { caption: "x" })).toEqual({ to: "52", type: "audio", audio: { link: "https://cdn/v.mp3" } });
   });
 });

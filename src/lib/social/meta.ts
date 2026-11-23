@@ -128,26 +128,39 @@ export async function publishToInstagram(input: { caption: string; imageUrl: str
   return published.id;
 }
 
+export interface SocialProfile {
+  firstName: string;
+  lastName: string;
+  username: string | null;
+}
+
+export type ProfileLookup = { profile: SocialProfile; error?: undefined } | { profile: null; error: string };
+
 /**
- * Best-effort public profile of a Messenger (PSID) or Instagram (IGSID) user,
- * used to name new contacts. Returns null without a token or on any error.
+ * Public profile of a Messenger (PSID) or Instagram (IGSID) sender, used to name
+ * the contact. Tries the full field set first and falls back to fewer fields,
+ * and reports Meta's reason when everything fails (surfaced to the advisor and
+ * kept on the webhook event) instead of silently leaving a placeholder name.
  */
-export async function fetchSocialProfile(
-  network: "facebook" | "instagram",
-  userId: string,
-): Promise<{ firstName: string; lastName: string; username: string | null } | null> {
-  if (!process.env.META_PAGE_ACCESS_TOKEN?.trim() || !process.env.META_PAGE_ID?.trim()) return null;
-  try {
-    if (network === "facebook") {
-      const p = await graph<{ first_name?: string; last_name?: string }>(`/${userId}`, { params: { fields: "first_name,last_name" } });
-      if (!p.first_name && !p.last_name) return null;
-      return { firstName: p.first_name ?? "", lastName: p.last_name ?? "", username: null };
-    }
-    const p = await graph<{ name?: string; username?: string }>(`/${userId}`, { params: { fields: "name,username" } });
-    const [first, ...rest] = (p.name ?? "").split(/\s+/).filter(Boolean);
-    if (!first && !p.username) return null;
-    return { firstName: first ?? `@${p.username}`, lastName: rest.join(" "), username: p.username ?? null };
-  } catch {
-    return null;
+export async function fetchSocialProfile(network: "facebook" | "instagram", userId: string): Promise<ProfileLookup> {
+  if (!process.env.META_PAGE_ACCESS_TOKEN?.trim() || !process.env.META_PAGE_ID?.trim()) {
+    return { profile: null, error: "Faltan META_PAGE_ACCESS_TOKEN o META_PAGE_ID." };
   }
+  const attempts = network === "facebook" ? ["first_name,last_name", "name"] : ["name,username", "username"];
+  let lastError = "sin respuesta";
+  for (const fields of attempts) {
+    try {
+      const p = await graph<{ first_name?: string; last_name?: string; name?: string; username?: string }>(`/${userId}`, { params: { fields } });
+      const full = p.name ?? `${p.first_name ?? ""} ${p.last_name ?? ""}`;
+      const [first, ...rest] = (p.first_name ? [p.first_name, p.last_name ?? ""] : full.split(/\s+/)).filter(Boolean);
+      const username = p.username ?? null;
+      if (first || username) {
+        return { profile: { firstName: first ?? `@${username}`, lastName: rest.join(" "), username } };
+      }
+      lastError = "Meta no devolvió nombre ni usuario.";
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : "error";
+    }
+  }
+  return { profile: null, error: lastError };
 }

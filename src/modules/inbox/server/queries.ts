@@ -8,6 +8,7 @@ import { isDemoMode } from "@/lib/db";
 import { prisma } from "@/lib/db/prisma";
 import { formatCurrency, formatRelativeTime, formatTime } from "@/lib/format";
 import { parseFactValue } from "@/lib/leadops/qualification";
+import { parseMedia } from "@/lib/media/rules";
 import { SERVICE_WINDOW_MS, isServiceWindowOpen } from "@/lib/leadops/rules";
 import {
   DEFAULT_QUICK_REPLIES,
@@ -168,6 +169,7 @@ export async function getConversation(ctx: TenantContext, id: string): Promise<C
       status: m.status,
       sentVia: m.sentVia,
       error: m.errorMessage,
+      media: parseMedia(m.media),
     }));
 
     const ct = c.contact;
@@ -203,6 +205,9 @@ export async function getConversation(ctx: TenantContext, id: string): Promise<C
       contactId: c.contactId,
       contactName: contactName(c.contact),
       contactPhone: c.contact?.whatsapp ?? c.contact?.phone ?? null,
+      needsProfileRefresh: Boolean(
+        c.contact && !c.contact.lastName && /^Contacto de (Instagram|Messenger)$/.test(c.contact.firstName),
+      ),
       status: c.status,
       priority: c.priority,
       assignedMembershipId: c.assignedMembershipId,
