@@ -1,10 +1,16 @@
 import "server-only";
 
 import { hasEnv } from "@/lib/integrations/env";
-import { buildMessageRequest, resolvePageToken } from "@/lib/social/meta-auth";
+import {
+  buildAttachmentRequest,
+  buildMessageRequest,
+  buildWhatsAppMediaPayload,
+  resolvePageToken,
+} from "@/lib/social/meta-auth";
 import type {
   ChannelAdapter,
   ChannelKind,
+  MediaMessage,
   OutboundMessage,
   SendResult,
   TemplateMessage,
@@ -22,6 +28,10 @@ function createMockAdapter(channel: ChannelKind): ChannelAdapter {
     async sendTemplate(message: TemplateMessage): Promise<SendResult> {
       void message;
       return { ok: true, externalId: `mock_${channel}_tpl_${Date.now()}` };
+    },
+    async sendMedia(message: MediaMessage): Promise<SendResult> {
+      void message;
+      return { ok: true, externalId: `mock_${channel}_media_${Date.now()}` };
     },
   };
 }
@@ -70,6 +80,9 @@ function createWhatsAppAdapter(): ChannelAdapter {
     send(message: OutboundMessage): Promise<SendResult> {
       return postWhatsApp({ to: message.to, type: "text", text: { preview_url: false, body: message.body } });
     },
+    sendMedia(message: MediaMessage): Promise<SendResult> {
+      return postWhatsApp(buildWhatsAppMediaPayload(message.to, message.kind, message.url, { caption: message.caption, fileName: message.fileName }));
+    },
     sendTemplate(message: TemplateMessage): Promise<SendResult> {
       const components = message.bodyParams.length
         ? [{ type: "body", parameters: message.bodyParams.map((text) => ({ type: "text", text })) }]
@@ -108,6 +121,33 @@ function createMetaAdapter(channel: "instagram" | "facebook"): ChannelAdapter {
         });
         if (!res.ok) return { ok: false, error: await graphError(res, "Meta Graph") };
         const data = (await res.json()) as { message_id?: string };
+        return { ok: true, externalId: data.message_id };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : "send failed" };
+      }
+    },
+    async sendMedia(message: MediaMessage): Promise<SendResult> {
+      const pageId = process.env.META_PAGE_ID?.trim();
+      if (!pageId) return { ok: false, error: "Falta META_PAGE_ID para enviar mensajes de Meta." };
+      if (!message.to) return { ok: false, error: "La conversación no tiene destinatario de Meta." };
+      try {
+        const token = await resolvePageToken(process.env.META_PAGE_ACCESS_TOKEN!.trim(), pageId);
+        const post = async (url: string, body: unknown) =>
+          fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify(body),
+            cache: "no-store",
+          });
+        const req = buildAttachmentRequest(pageId, message.to, message.kind, message.url);
+        const res = await post(req.url, req.body);
+        if (!res.ok) return { ok: false, error: await graphError(res, "Meta Graph") };
+        const data = (await res.json()) as { message_id?: string };
+        // Messenger/Instagram attachments carry no caption: send it as a follow-up text.
+        if (message.caption) {
+          const textReq = buildMessageRequest(pageId, message.to, message.caption);
+          await post(textReq.url, textReq.body).catch(() => null);
+        }
         return { ok: true, externalId: data.message_id };
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : "send failed" };

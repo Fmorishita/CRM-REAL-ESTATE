@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { getTenantContext, requirePermission } from "@/lib/auth/session";
@@ -10,6 +11,13 @@ import { prisma } from "@/lib/db/prisma";
 import { getChannelAdapter } from "@/lib/integrations/channels";
 import { suggestReply } from "@/lib/ai/runners";
 import { canSendToContact } from "@/lib/leadops/rules";
+import {
+  belongsToOrganization,
+  checkOutgoingMedia,
+  type MediaChannel,
+  type StoredMedia,
+} from "@/lib/media/rules";
+import { createSignedUpload, isStorageConfigured, mediaKey, objectExists, publicMediaUrl } from "@/lib/media/storage";
 import { fail, ok, type ActionResult } from "@/lib/result";
 import { demoConversationDetail } from "@/modules/inbox/demo";
 
@@ -38,7 +46,13 @@ type LoadedConversation = NonNullable<Awaited<ReturnType<typeof loadConversation
 async function recordOutbound(
   ctx: Awaited<ReturnType<typeof getTenantContext>>,
   conversation: LoadedConversation,
-  input: { body: string; sentVia: "crm" | "template"; result: { ok: boolean; externalId?: string; error?: string } },
+  input: {
+    body: string;
+    sentVia: "crm" | "template";
+    result: { ok: boolean; externalId?: string; error?: string };
+    /** Attachments shown in the chat bubble. */
+    media?: StoredMedia[];
+  },
 ): Promise<void> {
   const now = new Date();
   const contact = conversation.contact;
@@ -56,6 +70,7 @@ async function recordOutbound(
         externalId: result.externalId,
         errorMessage: result.ok ? null : (result.error ?? "Error del proveedor"),
         sentVia: input.sentVia,
+        ...(input.media?.length ? { media: input.media as unknown as Prisma.InputJsonValue } : {}),
       },
     }),
     ...(result.ok
@@ -488,4 +503,146 @@ export async function recommendProperty(input: unknown): Promise<ActionResult<vo
     console.error("recommendProperty failed:", error);
     return fail("No se pudo recomendar la propiedad.");
   }
+}
+
+const uploadSchema = z.object({
+  conversationId: z.string().uuid(),
+  fileName: z.string().trim().min(1).max(200),
+  mime: z.string().trim().min(3).max(120),
+  size: z.number().int().positive(),
+});
+
+function mediaChannelOf(channel: string): MediaChannel | null {
+  return channel === "whatsapp" || channel === "instagram" || channel === "facebook" ? channel : null;
+}
+
+/**
+ * Step 1 of sending a file: validates it against the channel's rules and returns a
+ * signed URL so the browser uploads straight to Storage (nothing large goes
+ * through the server).
+ */
+export async function createMediaUpload(
+  input: unknown,
+): Promise<ActionResult<{ uploadUrl: string; path: string; kind: "image" | "video" | "audio" | "document" }>> {
+  const ctx = await getTenantContext();
+  try {
+    requirePermission(ctx, "conversations.reply");
+  } catch {
+    return fail("No tienes permiso para responder conversaciones.");
+  }
+  const parsed = uploadSchema.safeParse(input);
+  if (!parsed.success) return fail("Archivo inválido.");
+  if (isDemoMode()) return fail("Modo demo: no se envían archivos.");
+  if (!isStorageConfigured()) return fail("El almacenamiento de archivos no está configurado.");
+
+  const conversation = await loadConversation(ctx.organization.id, parsed.data.conversationId);
+  if (!conversation) return fail("Conversación no encontrada.");
+  const channel = mediaChannelOf(conversation.channelAccount.channel);
+  if (!channel) return fail("Este canal no admite archivos.");
+  const check = checkOutgoingMedia(channel, parsed.data.mime, parsed.data.size);
+  if (!check.ok) return fail(check.error);
+
+  try {
+    const path = mediaKey(ctx.organization.id, "out", parsed.data.mime, parsed.data.fileName);
+    const { uploadUrl } = await createSignedUpload(path);
+    return ok({ uploadUrl, path, kind: check.kind });
+  } catch (error) {
+    console.error("createMediaUpload failed:", error);
+    return fail("No se pudo preparar la subida del archivo.");
+  }
+}
+
+const sendMediaSchema = z.object({
+  conversationId: z.string().uuid(),
+  path: z.string().min(10).max(300),
+  fileName: z.string().trim().min(1).max(200),
+  mime: z.string().trim().min(3).max(120),
+  size: z.number().int().positive(),
+  caption: z.string().trim().max(1000).optional(),
+});
+
+/** Step 2: the file is in Storage; send it to the customer with the same guards as a typed reply. */
+export async function sendMediaMessage(input: unknown): Promise<ActionResult<void>> {
+  const ctx = await getTenantContext();
+  try {
+    requirePermission(ctx, "conversations.reply");
+  } catch {
+    return fail("No tienes permiso para responder conversaciones.");
+  }
+  const parsed = sendMediaSchema.safeParse(input);
+  if (!parsed.success) return fail("Datos inválidos.");
+  if (isDemoMode()) return fail("Modo demo: no se envían archivos.");
+  const { conversationId, path, fileName, mime, size, caption } = parsed.data;
+  if (!belongsToOrganization(path, ctx.organization.id)) return fail("Archivo no válido.");
+
+  try {
+    const conversation = await loadConversation(ctx.organization.id, conversationId);
+    if (!conversation) return fail("Conversación no encontrada.");
+    const channelName = conversation.channelAccount.channel;
+    const channel = mediaChannelOf(channelName);
+    if (!channel) return fail("Este canal no admite archivos.");
+    const check = checkOutgoingMedia(channel, mime, size);
+    if (!check.ok) return fail(check.error);
+
+    const contact = conversation.contact;
+    if (contact) {
+      const guard = canSendToContact({ blockedAt: contact.blockedAt, lastInboundAt: contact.lastInboundAt, isTemplate: false });
+      if (!guard.allowed) {
+        return fail(
+          guard.reason === "blocked"
+            ? "Este contacto está bloqueado: no se le pueden enviar mensajes."
+            : "Ventana de 24 h cerrada: solo se puede responder dentro de 24 h desde el último mensaje del cliente.",
+        );
+      }
+    }
+    if (!(await objectExists(path))) return fail("El archivo no terminó de subirse. Inténtalo de nuevo.");
+
+    const url = publicMediaUrl(path);
+    const adapter = getChannelAdapter(channelName);
+    if (!adapter.sendMedia) return fail("El canal no admite archivos.");
+    const result = await adapter.sendMedia({ to: recipientOf(conversation), kind: check.kind, url, fileName, caption: caption || undefined });
+    const label = { image: "[imagen]", video: "[video]", audio: "[audio]", document: `[documento] ${fileName}` }[check.kind];
+    await recordOutbound(ctx, conversation, {
+      body: caption || label,
+      sentVia: "crm",
+      result,
+      media: [{ type: check.kind, url, name: fileName, mime }],
+    });
+    await auditLog(ctx, "conversation.media", { type: "conversation", id: conversation.id, metadata: { kind: check.kind, size } });
+    revalidatePath("/inbox");
+    if (!result.ok) return fail(`No se entregó: ${result.error ?? "error del proveedor"}`);
+    return ok(undefined);
+  } catch (error) {
+    console.error("sendMediaMessage failed:", error);
+    return fail("No se pudo enviar el archivo.");
+  }
+}
+
+/** Re-reads the Instagram/Messenger profile of a contact whose name is still a placeholder. */
+export async function refreshSocialProfile(input: unknown): Promise<ActionResult<{ name: string }>> {
+  const ctx = await getTenantContext();
+  try {
+    requirePermission(ctx, "contacts.edit");
+  } catch {
+    return fail("No tienes permiso para editar contactos.");
+  }
+  const parsed = z.object({ conversationId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return fail("Datos inválidos.");
+  if (isDemoMode()) return fail("Modo demo.");
+  const conversation = await loadConversation(ctx.organization.id, parsed.data.conversationId);
+  if (!conversation?.contact || !conversation.externalId) return fail("Conversación no encontrada.");
+  const network = conversation.channelAccount.channel;
+  if (network !== "instagram" && network !== "facebook") return fail("Solo aplica a Instagram y Messenger.");
+
+  const { fetchSocialProfile } = await import("@/lib/social/meta");
+  const lookup = await fetchSocialProfile(network, conversation.externalId);
+  if (!lookup.profile) return fail(`Meta no devolvió el perfil: ${lookup.error}`);
+  const p = lookup.profile;
+  await prisma.contact.update({
+    where: { id: conversation.contact.id },
+    data: { firstName: p.firstName, lastName: p.lastName, whatsappName: p.username ? `@${p.username}` : conversation.contact.whatsappName },
+  });
+  revalidatePath("/inbox");
+  revalidatePath("/leads");
+  return ok({ name: `${p.firstName} ${p.lastName}`.trim() });
 }

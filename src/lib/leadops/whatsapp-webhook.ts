@@ -26,6 +26,14 @@ export interface CtwaReferral {
   raw: Record<string, unknown>;
 }
 
+/** Reference to a file the customer sent; the bytes are fetched with the media id. */
+export interface WhatsAppMediaRef {
+  id: string;
+  kind: "image" | "video" | "audio" | "document";
+  mime: string | null;
+  filename: string | null;
+}
+
 export interface InboundMessageEvent {
   kind: "message";
   phoneNumberId: string;
@@ -36,6 +44,7 @@ export interface InboundMessageEvent {
   timestamp: Date;
   type: string;
   text: string;
+  media: WhatsAppMediaRef | null;
   referral: CtwaReferral | null;
   raw: Record<string, unknown>;
 }
@@ -102,6 +111,22 @@ function messageText(m: Obj): string {
     default:
       return `[${type}]`;
   }
+}
+
+const MEDIA_TYPES = { image: "image", sticker: "image", video: "video", audio: "audio", document: "document" } as const;
+
+function parseMediaRef(m: Obj): WhatsAppMediaRef | null {
+  const type = str(m.type);
+  if (!type || !(type in MEDIA_TYPES)) return null;
+  const body = obj(m[type]);
+  const id = str(body.id);
+  if (!id) return null;
+  return {
+    id,
+    kind: MEDIA_TYPES[type as keyof typeof MEDIA_TYPES],
+    mime: str(body.mime_type),
+    filename: str(body.filename),
+  };
 }
 
 function parseReferral(r: unknown): CtwaReferral | null {
@@ -171,6 +196,7 @@ export function parseWhatsAppPayload(body: unknown): WhatsAppEvent[] {
           timestamp: toDate(m.timestamp),
           type: str(m.type) ?? "unknown",
           text: messageText(m),
+          media: parseMediaRef(m),
           referral: parseReferral(m.referral),
           raw: m,
         });

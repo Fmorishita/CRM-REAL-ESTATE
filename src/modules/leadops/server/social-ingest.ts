@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { socialEventKey, type SocialMessageEvent } from "@/lib/leadops/meta-messaging";
 import { extractFactsFromText } from "@/lib/leadops/qualification";
 import { fetchSocialProfile } from "@/lib/social/meta";
+import { persistRemoteMedia } from "@/lib/media/storage";
 import { applyFacts } from "@/modules/leadops/server/facts";
 import { chooseAssignee } from "@/modules/leadops/server/ingest";
 import { resolveLeadOrganizationId } from "@/modules/leadops/server/organization";
@@ -41,7 +42,27 @@ async function resolveSocialChannel(e: SocialMessageEvent): Promise<Route | null
   });
 }
 
-async function handleInbound(e: SocialMessageEvent, route: Route): Promise<void> {
+/** Meta's attachment links expire within hours: keep our own copy of each file. */
+async function persistAttachments(organizationId: string, items: SocialMessageEvent["media"]) {
+  const out = await Promise.all(
+    items.map(async (m) => {
+      if (!m.url) return null;
+      const kind = (["image", "video", "audio"] as const).find((k) => k === m.type) ?? "document";
+      const stored = await persistRemoteMedia(organizationId, { url: m.url, type: kind });
+      return stored ?? { type: kind, url: m.url };
+    }),
+  );
+  return out.filter((m): m is NonNullable<typeof m> => m !== null);
+}
+
+/** A contact still carrying the placeholder name because the profile lookup had failed. */
+export function hasPlaceholderName(firstName: string, lastName: string): boolean {
+  return !lastName && /^Contacto de (Instagram|Messenger)$/.test(firstName);
+}
+
+/** Returns a warning (kept on the webhook event) when the profile could not be read. */
+async function handleInbound(e: SocialMessageEvent, route: Route): Promise<string | null> {
+  let warning: string | null = null;
   const { organizationId } = route;
   let conversation = await prisma.conversation.findFirst({
     where: { organizationId, channelAccountId: route.id, externalId: e.userId },
@@ -52,7 +73,9 @@ async function handleInbound(e: SocialMessageEvent, route: Route): Promise<void>
   const isNew = !contact;
 
   if (!contact) {
-    const profile = await fetchSocialProfile(e.network, e.userId);
+    const lookup = await fetchSocialProfile(e.network, e.userId);
+    if (!lookup.profile) warning = `perfil: ${lookup.error}`;
+    const profile = lookup.profile;
     contact = await prisma.contact.create({
       data: {
         organizationId,
@@ -63,6 +86,21 @@ async function handleInbound(e: SocialMessageEvent, route: Route): Promise<void>
         whatsappName: profile?.username ? `@${profile.username}` : null,
       },
     });
+  } else if (hasPlaceholderName(contact.firstName, contact.lastName)) {
+    // Retry on every message until Meta gives us a name.
+    const lookup = await fetchSocialProfile(e.network, e.userId);
+    if (lookup.profile) {
+      contact = await prisma.contact.update({
+        where: { id: contact.id },
+        data: {
+          firstName: lookup.profile.firstName,
+          lastName: lookup.profile.lastName,
+          whatsappName: lookup.profile.username ? `@${lookup.profile.username}` : contact.whatsappName,
+        },
+      });
+    } else {
+      warning = `perfil: ${lookup.error}`;
+    }
   }
 
   // Attribution: every ad touch is kept; the first touch is credited.
@@ -117,6 +155,8 @@ async function handleInbound(e: SocialMessageEvent, route: Route): Promise<void>
     });
   }
 
+  const storedMedia = await persistAttachments(organizationId, e.media);
+
   await prisma.$transaction([
     prisma.message.create({
       data: {
@@ -128,7 +168,7 @@ async function handleInbound(e: SocialMessageEvent, route: Route): Promise<void>
         externalId: e.messageId,
         status: "delivered",
         sentAt: e.timestamp,
-        media: e.media.length ? (e.media as unknown as Prisma.InputJsonValue) : undefined,
+        media: storedMedia.length ? (storedMedia as unknown as Prisma.InputJsonValue) : undefined,
       },
     }),
     prisma.conversation.update({
@@ -147,6 +187,7 @@ async function handleInbound(e: SocialMessageEvent, route: Route): Promise<void>
 
   const facts = extractFactsFromText(e.text);
   if (Object.keys(facts).length > 0) await applyFacts(organizationId, contact.id, facts, "system");
+  return warning;
 }
 
 /** Reply typed in Meta Business Suite / the phone app: mirrored as human, bot off. */
@@ -158,6 +199,7 @@ async function handleEcho(e: SocialMessageEvent, route: Route): Promise<boolean>
   });
   if (!conversation) return false;
   const contact = conversation.contact;
+  const echoMedia = await persistAttachments(route.organizationId, e.media);
   await prisma.$transaction([
     prisma.message.create({
       data: {
@@ -170,6 +212,7 @@ async function handleEcho(e: SocialMessageEvent, route: Route): Promise<boolean>
         status: "sent",
         sentAt: e.timestamp,
         sentVia: "meta_inbox",
+        media: echoMedia.length ? (echoMedia as unknown as Prisma.InputJsonValue) : undefined,
       },
     }),
     prisma.conversation.update({
@@ -229,8 +272,11 @@ export async function ingestSocialEvent(e: SocialMessageEvent): Promise<"process
     return "duplicate";
   }
   try {
-    const handled = e.isEcho ? await handleEcho(e, route) : (await handleInbound(e, route), true);
-    await finish(handled ? "processed" : "ignored");
+    let warning: string | null = null;
+    let handled = true;
+    if (e.isEcho) handled = await handleEcho(e, route);
+    else warning = await handleInbound(e, route);
+    await finish(handled ? "processed" : "ignored", warning ? { error: warning } : {});
     return handled ? "processed" : "ignored";
   } catch (error) {
     console.error("ingestSocialEvent failed:", error);
