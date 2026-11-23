@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { socialEventKey, type SocialMessageEvent } from "@/lib/leadops/meta-messaging";
 import { extractFactsFromText } from "@/lib/leadops/qualification";
 import { fetchSocialProfile } from "@/lib/social/meta";
+import { normalizeMediaType } from "@/lib/media/rules";
 import { persistRemoteMedia } from "@/lib/media/storage";
 import { applyFacts } from "@/modules/leadops/server/facts";
 import { chooseAssignee } from "@/modules/leadops/server/ingest";
@@ -47,7 +48,7 @@ async function persistAttachments(organizationId: string, items: SocialMessageEv
   const out = await Promise.all(
     items.map(async (m) => {
       if (!m.url) return null;
-      const kind = (["image", "video", "audio"] as const).find((k) => k === m.type) ?? "document";
+      const kind = normalizeMediaType(m.type);
       const stored = await persistRemoteMedia(organizationId, { url: m.url, type: kind });
       return stored ?? { type: kind, url: m.url };
     }),

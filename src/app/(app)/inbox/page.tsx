@@ -86,6 +86,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
           {conversation ? (
             <div className="w-full min-w-0">
               <ConversationView
+                key={conversation.id}
                 conversation={conversation}
                 options={options}
                 persist={!isDemoMode() && canReply}

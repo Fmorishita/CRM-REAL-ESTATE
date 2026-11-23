@@ -13,6 +13,9 @@ export type MediaChannel = "whatsapp" | "instagram" | "facebook";
 
 const MB = 1024 * 1024;
 
+/** Per-object cap of the chat-media bucket (Supabase Storage); no outgoing limit may exceed it. */
+export const STORAGE_MAX_BYTES = 50 * MB;
+
 export interface MediaRule {
   mimes: string[];
   maxBytes: number;
@@ -34,7 +37,7 @@ export const MEDIA_RULES: Record<MediaChannel, Partial<Record<MediaKind, MediaRu
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "text/plain",
       ],
-      maxBytes: 100 * MB,
+      maxBytes: STORAGE_MAX_BYTES,
     },
   },
   facebook: {
@@ -99,6 +102,11 @@ const KNOWN_TYPES: Record<string, MediaKind> = {
   video: "video", audio: "audio", voice: "audio", file: "document", document: "document",
 };
 
+/** Maps a Meta attachment type (sticker, ig_reel, story_mention, file…) to what the chat renders. */
+export function normalizeMediaType(type: unknown): MediaKind {
+  return KNOWN_TYPES[String(type ?? "").toLowerCase()] ?? "document";
+}
+
 /**
  * Normalizes whatever was stored in messages.media (older rows hold
  * {type} objects without a URL, newer ones arrays of {type,url}).
@@ -111,7 +119,7 @@ export function parseMedia(raw: unknown): StoredMedia[] {
     const o = item as Record<string, unknown>;
     const url = typeof o.url === "string" && /^https?:\/\//.test(o.url) ? o.url : null;
     if (!url) continue;
-    const type = KNOWN_TYPES[String(o.type ?? "").toLowerCase()] ?? "document";
+    const type = normalizeMediaType(o.type);
     out.push({
       type,
       url,

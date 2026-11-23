@@ -80,8 +80,16 @@ function createWhatsAppAdapter(): ChannelAdapter {
     send(message: OutboundMessage): Promise<SendResult> {
       return postWhatsApp({ to: message.to, type: "text", text: { preview_url: false, body: message.body } });
     },
-    sendMedia(message: MediaMessage): Promise<SendResult> {
-      return postWhatsApp(buildWhatsAppMediaPayload(message.to, message.kind, message.url, { caption: message.caption, fileName: message.fileName }));
+    async sendMedia(message: MediaMessage): Promise<SendResult> {
+      const sent = await postWhatsApp(
+        buildWhatsAppMediaPayload(message.to, message.kind, message.url, { caption: message.caption, fileName: message.fileName }),
+      );
+      // WhatsApp audio cannot carry a caption: deliver the text as its own message, and say so if that part fails.
+      if (sent.ok && message.kind === "audio" && message.caption) {
+        const text = await postWhatsApp({ to: message.to, type: "text", text: { preview_url: false, body: message.caption } });
+        if (!text.ok) return { ok: false, externalId: sent.externalId, error: `El audio se envió, pero el texto no: ${text.error}` };
+      }
+      return sent;
     },
     sendTemplate(message: TemplateMessage): Promise<SendResult> {
       const components = message.bodyParams.length
@@ -146,7 +154,10 @@ function createMetaAdapter(channel: "instagram" | "facebook"): ChannelAdapter {
         // Messenger/Instagram attachments carry no caption: send it as a follow-up text.
         if (message.caption) {
           const textReq = buildMessageRequest(pageId, message.to, message.caption);
-          await post(textReq.url, textReq.body).catch(() => null);
+          const textRes = await post(textReq.url, textReq.body).catch(() => null);
+          if (!textRes?.ok) {
+            return { ok: false, externalId: data.message_id, error: "El archivo se envió, pero el texto que lo acompaña no." };
+          }
         }
         return { ok: true, externalId: data.message_id };
       } catch (error) {

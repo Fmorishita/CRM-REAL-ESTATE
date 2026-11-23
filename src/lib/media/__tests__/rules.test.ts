@@ -57,3 +57,23 @@ describe("stored media", () => {
     expect(belongsToOrganization("org-1/../org-2/a.jpg", "org-1")).toBe(false);
   });
 });
+
+describe("review fixes", () => {
+  it("never allows an outgoing file larger than the Storage cap", async () => {
+    const { MEDIA_RULES, STORAGE_MAX_BYTES } = await import("@/lib/media/rules");
+    for (const rules of Object.values(MEDIA_RULES)) {
+      for (const rule of Object.values(rules)) expect(rule!.maxBytes).toBeLessThanOrEqual(STORAGE_MAX_BYTES);
+    }
+    const r = checkOutgoingMedia("whatsapp", "application/pdf", 60 * 1024 * 1024);
+    expect(!r.ok && r.error).toContain("hasta 50 MB");
+  });
+
+  it("keeps stickers, reels and story mentions as image/video instead of documents", async () => {
+    const { normalizeMediaType } = await import("@/lib/media/rules");
+    expect(normalizeMediaType("sticker")).toBe("image");
+    expect(normalizeMediaType("ig_reel")).toBe("video");
+    expect(normalizeMediaType("story_mention")).toBe("image");
+    expect(normalizeMediaType("file")).toBe("document");
+    expect(normalizeMediaType(undefined)).toBe("document");
+  });
+});
